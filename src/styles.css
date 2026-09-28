@@ -24,10 +24,11 @@
   --color-surface-raised: var(--color-cream-200);
   --color-ink: oklch(0.35 0.01 90);
   --color-ink-muted: oklch(0.52 0.01 90);
-  --color-ink-subtle: oklch(0.68 0.01 90);
+  --color-ink-subtle: oklch(0.56 0.01 90);
   --color-primary: var(--color-sage-600);
   --color-primary-soft: var(--color-sage-200);
   --color-primary-deep: var(--color-sage-700);
+  /* solo rellenos decorativos, no texto (2.46:1) */
   --color-accent: var(--color-lavender-400);
   --color-accent-soft: var(--color-lavender-100);
   --color-bloom: var(--color-lavender-600);
