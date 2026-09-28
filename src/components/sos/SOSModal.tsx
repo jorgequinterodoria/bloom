@@ -1,7 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
+import { useEffect } from "react";
 
 interface Props {
   open: boolean;
@@ -9,6 +10,17 @@ interface Props {
 }
 
 export function SOSModal({ open, onClose }: Props) {
+  const reduce = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -24,17 +36,22 @@ export function SOSModal({ open, onClose }: Props) {
           <button
             type="button"
             aria-label="Cerrar"
+            autoFocus
             onClick={onClose}
             className="absolute right-4 top-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted text-ink-muted"
           >
             <X className="h-6 w-6" aria-hidden />
           </button>
 
-          {/* Mitad superior: círculo de respiración (3 minutos) */}
+          <p className="sr-only">
+            Respira siguiendo el círculo: inhala lentamente y exhala despacio.
+          </p>
+
+          {/* Mitad superior: círculo de respiración */}
           <div className="flex flex-1 items-center justify-center">
             <motion.div
               aria-hidden
-              animate={{ scale: [1, 1.3, 1] }}
+              animate={reduce ? {} : { scale: [1, 1.3, 1] }}
               transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
               className="h-48 w-48 rounded-full bg-accent-soft ring-8 ring-accent/40"
             />

@@ -16,4 +16,18 @@ describe("SOSModal", () => {
     fireEvent.click(screen.getByLabelText(/cerrar/i));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("expone el diálogo con su nombre accesible", () => {
+    render(<SOSModal open onClose={() => {}} />);
+    expect(
+      screen.getByRole("dialog", { name: /modo calma/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("cierra al pulsar Escape", () => {
+    const onClose = vi.fn();
+    render(<SOSModal open onClose={onClose} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
