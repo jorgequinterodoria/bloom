@@ -121,6 +121,29 @@ describe("HomeScreen", () => {
     expect(callsTo("/api/checkin")).toHaveLength(1);
   });
 
+  it("si el checkin falla por red no navega, no rompe la UI y permite reintentar", async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
+      if (url.startsWith("/api/log")) return ok(logPayload);
+      if (url.startsWith("/api/checkin")) return Promise.reject(new Error("network"));
+      return ok({});
+    });
+
+    render(<HomeScreen />);
+
+    const pill = await screen.findByRole("button", { name: /ansiosa/i });
+    fireEvent.click(pill);
+
+    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(1));
+    expect(push).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(pill).toBeEnabled());
+    fireEvent.click(pill);
+    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(2));
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("el botón SOS abre el diálogo y dispara POST /api/sos con el día", async () => {
     render(<HomeScreen />);
 

@@ -57,6 +57,8 @@ export default function HomeScreen() {
         if (typeof data.stage === "number") setStage(data.stage);
         setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), checkedIn: true }));
         router.push(`/move?mood=${encodeURIComponent(mood)}`);
+      } catch {
+        // fallo de red: nos quedamos en casa
       } finally {
         setBusy(false);
       }
@@ -75,6 +77,8 @@ export default function HomeScreen() {
       const data = await res.json();
       if (typeof data.stage === "number") setStage(data.stage);
       setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), weekendRide: true }));
+    } catch {
+      // fallo de red: nos quedamos en casa
     } finally {
       setBusy(false);
     }
