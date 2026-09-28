@@ -218,4 +218,33 @@ describe("HomeScreen", () => {
     expect(calls[0][1]?.method).toBe("POST");
     expect(postBody(calls[0])).toEqual({ day: todayKey() });
   });
+
+  it("si /api/log falla muestra el alerto con reintentar y al reintentar recupera la UI", async () => {
+    let logAttempts = 0;
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
+      if (url.startsWith("/api/log")) {
+        logAttempts += 1;
+        if (logAttempts === 1) return Promise.reject(new Error("network"));
+        return ok(logPayload);
+      }
+      if (url.startsWith("/api/checkin")) return ok({ ok: true, stage: 3, dayKey: todayKey() });
+      return ok({});
+    });
+
+    render(<HomeScreen />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/no pudimos cargar tu día/i);
+    expect(screen.queryByText(/cargando tu día/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /registro de ánimo/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+
+    expect(await screen.findByRole("region", { name: /registro de ánimo/i })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/cargando tu día/i)).not.toBeInTheDocument();
+    expect(callsTo("/api/log")).toHaveLength(2);
+  });
 });

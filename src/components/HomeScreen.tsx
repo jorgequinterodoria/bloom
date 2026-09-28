@@ -20,8 +20,20 @@ export default function HomeScreen() {
   const [weekend, setWeekend] = useState(false);
   const [stage, setStage] = useState(0);
   const [log, setLog] = useState<DayLog | null>(null);
+  const [logError, setLogError] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const loadLog = useCallback(() => {
+    setLogError(false);
+    fetch(`/api/log?day=${todayKey()}`)
+      .then((r) => {
+        if (!r.ok) throw new Error("log fetch failed");
+        return r.json();
+      })
+      .then((d) => setLog(d))
+      .catch(() => setLogError(true));
+  }, []);
 
   useEffect(() => {
     setWeekend(isWeekendDay(new Date()));
@@ -32,14 +44,8 @@ export default function HomeScreen() {
       })
       .then((d) => typeof d.stage === "number" && setStage(d.stage))
       .catch(() => {});
-    fetch(`/api/log?day=${todayKey()}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("log fetch failed");
-        return r.json();
-      })
-      .then((d) => setLog(d))
-      .catch(() => {});
-  }, []);
+    loadLog();
+  }, [loadLog]);
 
   useEffect(() => {
     if (!sosOpen) return;
@@ -127,9 +133,24 @@ export default function HomeScreen() {
       </div>
 
       {log === null ? (
-        <p role="status" className="text-center text-sm text-ink-muted">
-          Cargando tu día…
-        </p>
+        logError ? (
+          <div className="space-y-4 text-center">
+            <p role="alert" className="text-sm text-ink">
+              No pudimos cargar tu día.
+            </p>
+            <button
+              type="button"
+              onClick={loadLog}
+              className="min-h-12 rounded-2xl bg-primary px-4 text-sm text-surface"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <p role="status" className="text-center text-sm text-ink-muted">
+            Cargando tu día…
+          </p>
+        )
       ) : (
         <>
           {showCheckinConfirm && (
