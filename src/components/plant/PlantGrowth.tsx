@@ -29,7 +29,7 @@ export function PlantGrowth({ stage }: Props) {
   return (
     <svg
       role="img"
-      aria-label="Planta de Bloom"
+      aria-label={`Planta de Bloom — etapa ${stage} de ${MAX_PLANT_STAGE}`}
       viewBox="0 0 200 220"
       className="h-64 w-full max-w-[280px]"
     >
@@ -54,7 +54,7 @@ export function PlantGrowth({ stage }: Props) {
 
       {/* brote */}
       {showSprout && (
-        <ellipse cx="88" cy="140" rx="14" ry="8" fill="var(--color-sage-500)" transform="rotate(-25 88 140)" />
+        <ellipse data-testid="sprout" cx="88" cy="140" rx="14" ry="8" fill="var(--color-sage-500)" transform="rotate(-25 88 140)" />
       )}
 
       {/* hojas */}
