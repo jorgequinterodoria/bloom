@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlantGrowth } from "@/components/plant/PlantGrowth";
 import { MoodButtons } from "@/components/mood/MoodButtons";
 import { SOSModal } from "@/components/sos/SOSModal";
@@ -26,11 +26,17 @@ export default function HomeScreen() {
   useEffect(() => {
     setWeekend(isWeekendDay(new Date()));
     fetch("/api/plant")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("plant fetch failed");
+        return r.json();
+      })
       .then((d) => typeof d.stage === "number" && setStage(d.stage))
       .catch(() => {});
     fetch(`/api/log?day=${todayKey()}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("log fetch failed");
+        return r.json();
+      })
       .then((d) => setLog(d))
       .catch(() => {});
   }, []);
@@ -53,6 +59,7 @@ export default function HomeScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mood, day: todayKey() }),
         });
+        if (!res.ok) throw new Error("checkin failed");
         const data = await res.json();
         if (typeof data.stage === "number") setStage(data.stage);
         setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), checkedIn: true }));
@@ -74,6 +81,7 @@ export default function HomeScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ day: todayKey() }),
       });
+      if (!res.ok) throw new Error("ride failed");
       const data = await res.json();
       if (typeof data.stage === "number") setStage(data.stage);
       setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), weekendRide: true }));
@@ -86,9 +94,16 @@ export default function HomeScreen() {
 
   const alreadyCheckedIn = Boolean(log?.checkedIn);
   const alreadyRode = Boolean(log?.weekendRide);
+  const showCheckinConfirm = alreadyCheckedIn && !weekend;
+  const showRideConfirm = weekend && alreadyRode;
+  const confirmRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (showCheckinConfirm || showRideConfirm) confirmRef.current?.focus();
+  }, [showCheckinConfirm, showRideConfirm]);
 
   return (
-    <main className="relative space-y-8 py-8">
+    <main className="relative space-y-8 py-8 pb-24">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm uppercase tracking-widest text-ink-subtle">
@@ -111,25 +126,45 @@ export default function HomeScreen() {
         <PlantGrowth stage={stage} />
       </div>
 
-      {alreadyCheckedIn && !weekend && (
-        <p className="rounded-3xl bg-primary-soft p-5 text-center text-ink">
-          Gracias por registrar cómo te sientes. Tu planta ha crecido un poco
-          más.
+      {log === null ? (
+        <p role="status" className="text-center text-sm text-ink-muted">
+          Cargando tu día…
         </p>
-      )}
+      ) : (
+        <>
+          {showCheckinConfirm && (
+            <p
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+              ref={confirmRef}
+              className="rounded-3xl bg-primary-soft p-5 text-center text-ink"
+            >
+              Gracias por registrar cómo te sientes. Tu planta ha crecido un poco
+              más.
+            </p>
+          )}
 
-      {!weekend && !alreadyCheckedIn && (
-        <MoodButtons weekend={false} onSelect={handleMood} onRide={handleRide} disabled={busy} />
-      )}
+          {!weekend && !alreadyCheckedIn && (
+            <MoodButtons weekend={false} onSelect={handleMood} onRide={handleRide} disabled={busy} />
+          )}
 
-      {weekend && !alreadyRode && (
-        <MoodButtons weekend onSelect={handleMood} onRide={handleRide} disabled={busy} />
-      )}
+          {weekend && !alreadyRode && (
+            <MoodButtons weekend onSelect={handleMood} onRide={handleRide} disabled={busy} />
+          )}
 
-      {weekend && alreadyRode && (
-        <p className="rounded-3xl bg-accent-soft p-5 text-center text-ink">
-          Paseo registrado. Disfruta el resto del fin de semana.
-        </p>
+          {showRideConfirm && (
+            <p
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+              ref={confirmRef}
+              className="rounded-3xl bg-accent-soft p-5 text-center text-ink"
+            >
+              Paseo registrado. Disfruta el resto del fin de semana.
+            </p>
+          )}
+        </>
       )}
 
       <button

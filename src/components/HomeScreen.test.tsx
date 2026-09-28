@@ -144,6 +144,40 @@ describe("HomeScreen", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("si el checkin devuelve res.ok=false no navega ni cambia el estado", async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
+      if (url.startsWith("/api/log")) return ok(logPayload);
+      if (url.startsWith("/api/checkin"))
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: "not found" }) });
+      return ok({});
+    });
+
+    render(<HomeScreen />);
+
+    const pill = await screen.findByRole("button", { name: /ansiosa/i });
+    fireEvent.click(pill);
+
+    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(1));
+    expect(push).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(pill).toBeEnabled());
+    expect(screen.getByRole("button", { name: /ansiosa/i })).toBeInTheDocument();
+    expect(screen.queryByText(/gracias por registrar cómo te sientes/i)).not.toBeInTheDocument();
+  });
+
+  it("tras un checkin exitoso la planta muestra la etapa devuelta por /api/checkin", async () => {
+    render(<HomeScreen />);
+
+    expect(await screen.findByRole("img", { name: /etapa 2 de 12/ })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /ansiosa/i }));
+
+    expect(await screen.findByRole("img", { name: /etapa 3 de 12/ })).toBeInTheDocument();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/move?mood=Ansiosa"));
+  });
+
   it("el botón SOS abre el diálogo y dispara POST /api/sos con el día", async () => {
     render(<HomeScreen />);
 
