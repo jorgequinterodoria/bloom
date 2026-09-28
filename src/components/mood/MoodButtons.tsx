@@ -1,10 +1,10 @@
 "use client";
 
-import { MOODS, WEEKEND_ICON } from "@/lib/constants";
+import { MOODS, WEEKEND_ICON, type MoodName } from "@/lib/constants";
 
 interface Props {
   weekend: boolean;
-  onSelect: (mood: string) => void;
+  onSelect: (mood: MoodName) => void;
   onRide: () => void;
   disabled?: boolean;
 }
@@ -13,7 +13,7 @@ export function MoodButtons({ weekend, onSelect, onRide, disabled }: Props) {
   if (weekend) {
     const Bike = WEEKEND_ICON;
     return (
-      <section className="space-y-4 rounded-3xl bg-accent-soft p-6">
+      <section aria-label="Fin de semana" className="space-y-4 rounded-3xl bg-accent-soft p-6">
         <div className="flex items-center gap-3">
           <Bike className="h-6 w-6 text-bloom" aria-hidden />
           <h2 className="font-serif text-xl text-ink">Fin de semana</h2>
@@ -48,7 +48,7 @@ export function MoodButtons({ weekend, onSelect, onRide, disabled }: Props) {
             <Icon className="h-6 w-6 text-primary-deep" aria-hidden />
             <span>
               <span className="block font-medium">{mood.label}</span>
-              <span className="block text-xs text-ink-muted">{mood.hint}</span>
+              <span className="block text-xs text-ink">{mood.hint}</span>
             </span>
           </button>
         );
