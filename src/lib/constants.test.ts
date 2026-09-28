@@ -30,4 +30,16 @@ describe("flujos de ejercicios", () => {
       [...MOODS.map((m) => m.name)].sort(),
     );
   });
+
+  it("findFlow devuelve [] para un ánimo desconocido", () => {
+    expect(findFlow("No existe")).toEqual([]);
+  });
+
+  it("los ejercicios no se repiten dentro de un flujo y tienen nombre", () => {
+    for (const mood of MOODS) {
+      const flow = findFlow(mood.name);
+      expect(new Set(flow.map((e) => e.name)).size).toBe(flow.length);
+      for (const ex of flow) expect(ex.name.trim()).not.toBe("");
+    }
+  });
 });

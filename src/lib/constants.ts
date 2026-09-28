@@ -13,7 +13,7 @@ export interface FlowExercise {
   durationSeconds: number;
 }
 
-export const MOODS: MoodDef[] = [
+export const MOODS = [
   {
     name: "Estresada",
     label: "Estresada",
@@ -38,11 +38,13 @@ export const MOODS: MoodDef[] = [
     hint: "Empezar despacio",
     icon: BatteryLow,
   },
-];
+] as const satisfies readonly MoodDef[];
+
+export type MoodName = (typeof MOODS)[number]["name"];
 
 export const WEEKEND_ICON = Bike;
 
-export const EXERCISE_LIBRARY: Record<string, FlowExercise[]> = {
+export const EXERCISE_LIBRARY: Record<MoodName, FlowExercise[]> = {
   Estresada: [
     { name: "Respiración 4-7-8", durationSeconds: 60 },
     { name: "Estiramiento de cuello", durationSeconds: 45 },
@@ -70,5 +72,5 @@ export const EXERCISE_LIBRARY: Record<string, FlowExercise[]> = {
 };
 
 export function findFlow(moodName: string): FlowExercise[] {
-  return EXERCISE_LIBRARY[moodName] ?? [];
+  return EXERCISE_LIBRARY[moodName as MoodName] ?? [];
 }
