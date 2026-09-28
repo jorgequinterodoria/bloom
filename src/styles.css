@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paletas base */
+  --color-cream-50: oklch(0.99 0.005 95);
+  --color-cream-100: oklch(0.97 0.01 95);
+  --color-cream-200: oklch(0.93 0.012 95);
+
+  --color-sage-100: oklch(0.96 0.02 145);
+  --color-sage-200: oklch(0.91 0.035 145);
+  --color-sage-300: oklch(0.85 0.05 145);
+  --color-sage-500: oklch(0.63 0.06 145);
+  --color-sage-600: oklch(0.55 0.06 145);
+  --color-sage-700: oklch(0.46 0.05 145);
+
+  --color-lavender-100: oklch(0.96 0.02 300);
+  --color-lavender-200: oklch(0.91 0.04 300);
+  --color-lavender-400: oklch(0.72 0.07 300);
+  --color-lavender-600: oklch(0.52 0.07 300);
+
+  /* Nombres semánticos (los usan los componentes) */
+  --color-surface: var(--color-cream-50);
+  --color-surface-muted: var(--color-cream-100);
+  --color-surface-raised: var(--color-cream-200);
+  --color-ink: oklch(0.35 0.01 90);
+  --color-ink-muted: oklch(0.52 0.01 90);
+  --color-ink-subtle: oklch(0.68 0.01 90);
+  --color-primary: var(--color-sage-600);
+  --color-primary-soft: var(--color-sage-200);
+  --color-primary-deep: var(--color-sage-700);
+  --color-accent: var(--color-lavender-400);
+  --color-accent-soft: var(--color-lavender-100);
+  --color-bloom: var(--color-lavender-600);
+
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+}
