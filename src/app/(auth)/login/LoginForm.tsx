@@ -13,17 +13,26 @@ export default function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("Correo o contraseña incorrectos.");
-      return;
+    try {
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (res?.error) {
+        setError(
+          res.error === "CredentialsSignin"
+            ? "Correo o contraseña incorrectos."
+            : "Error del servidor. Intenta de nuevo.",
+        );
+        return;
+      }
+      window.location.href = "/";
+    } catch {
+      setError("No se pudo iniciar sesión. Revisa tu conexión.");
+    } finally {
+      setLoading(false);
     }
-    window.location.href = "/";
   }
 
   return (

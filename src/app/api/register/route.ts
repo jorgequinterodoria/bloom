@@ -34,6 +34,17 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await db.insert(users).values({ email, passwordHash });
+  try {
+    await db.insert(users).values({ email, passwordHash });
+  } catch (err) {
+    // 23505 = unique_violation (carrera de registros duplicados)
+    if ((err as { code?: string })?.code === "23505") {
+      return NextResponse.json(
+        { error: "Ese correo ya está registrado." },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
   return NextResponse.json({ ok: true }, { status: 201 });
 }
