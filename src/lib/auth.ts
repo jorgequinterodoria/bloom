@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Auto-hospedaje (fuera de Vercel) exige confiar el host; sin esto
+  // /api/auth/* devuelve 500 UntrustedHost en producción.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
