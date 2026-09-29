@@ -100,8 +100,8 @@ export function WorkoutPlayer() {
 
   if (finished) {
     return (
-      <main role="status" className="space-y-6 py-16 text-center">
-        <p className="font-serif text-3xl text-ink">Listo por hoy</p>
+      <main className="space-y-6 py-16 text-center">
+        <p role="status" className="font-serif text-3xl text-ink">Listo por hoy</p>
         <p className="text-ink-muted">Tu planta te espera en casa.</p>
         {saveFailed && (
           <p role="status" className="text-sm text-ink-muted">
