@@ -27,17 +27,25 @@ self.addEventListener("fetch", (event) => {
   if (!STATIC_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached ?? network;
-    }),
+    caches
+      .match(request)
+      .then((cached) => {
+        const network = fetch(request)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              event.waitUntil(
+                caches
+                  .open(CACHE)
+                  .then((c) => c.put(request, copy))
+                  .catch(() => {}),
+              );
+            }
+            return res;
+          })
+          .catch(() => cached ?? Response.error());
+        return cached ?? network;
+      })
+      .catch(() => Response.error()),
   );
 });
