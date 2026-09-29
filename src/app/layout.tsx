@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SWRegister } from "@/components/SWRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="bg-surface text-ink antialiased">
+        <SWRegister />
         <div className="mx-auto min-h-dvh w-full max-w-[430px] px-5 pb-10">
           {children}
         </div>
