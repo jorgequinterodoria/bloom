@@ -8,6 +8,13 @@
       "when": 1790608147652,
       "tag": "0000_futuristic_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790676594843,
+      "tag": "0001_quick_sentinel",
+      "breakpoints": true
     }
   ]
 }

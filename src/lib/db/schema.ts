@@ -3,6 +3,7 @@ import {
   boolean,
   integer,
   pgTable,
+  text,
   timestamp,
   unique,
   uuid,
@@ -29,6 +30,8 @@ export const exercises = pgTable("exercises", {
   name: varchar("name", { length: 255 }).notNull(),
   durationSeconds: integer("duration_seconds").notNull(),
   position: integer("position").notNull().default(0),
+  instructions: text("instructions"),
+  illustration: varchar("illustration", { length: 255 }),
   moodId: uuid("mood_id")
     .references(() => moods.id)
     .notNull(),
