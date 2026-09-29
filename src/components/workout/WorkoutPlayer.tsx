@@ -1,0 +1,163 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { Pause, Play, SkipForward } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { todayKey } from "@/lib/utils";
+import { nextIndex, timeLeftAfterTick } from "./flow";
+
+interface Exercise {
+  name: string;
+  durationSeconds: number;
+}
+
+export function WorkoutPlayer() {
+  const searchParams = useSearchParams();
+  const mood = searchParams.get("mood");
+
+  const [exercises, setExercises] = useState<Exercise[] | null>(null);
+  const [error, setError] = useState(false);
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const postedRef = useRef(false);
+
+  useEffect(() => {
+    if (!mood) {
+      setError(true);
+      return;
+    }
+    fetch(`/api/exercises?mood=${encodeURIComponent(mood)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setExercises(data.exercises ?? []))
+      .catch(() => setError(true));
+  }, [mood]);
+
+  useEffect(() => {
+    if (exercises?.[index]) setTimeLeft(exercises[index].durationSeconds);
+  }, [exercises, index]);
+
+  useEffect(() => {
+    if (paused || finished || !exercises) return;
+    const id = setInterval(() => {
+      setTimeLeft((left) => timeLeftAfterTick(left));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [paused, finished, exercises]);
+
+  useEffect(() => {
+    if (!exercises || timeLeft !== 0 || finished) return;
+    const next = nextIndex(index, exercises.length);
+    if (next === null) setFinished(true);
+    else setIndex(next);
+  }, [timeLeft, exercises, index, finished]);
+
+  useEffect(() => {
+    if (!finished || postedRef.current) return;
+    postedRef.current = true;
+    fetch("/api/workout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ day: todayKey() }),
+    }).catch(() => {});
+  }, [finished]);
+
+  if (error || !mood) {
+    return (
+      <main className="space-y-6 py-16 text-center">
+        <p className="text-ink-muted">No encontramos tu flujo de hoy.</p>
+        <Link href="/" className="inline-block min-h-12 rounded-2xl bg-primary px-6 py-3 text-surface">
+          Volver al inicio
+        </Link>
+      </main>
+    );
+  }
+
+  if (!exercises) {
+    return (
+      <main className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-ink-subtle">Preparando tu movimiento…</p>
+      </main>
+    );
+  }
+
+  if (finished) {
+    return (
+      <main className="space-y-6 py-16 text-center">
+        <p className="font-serif text-3xl text-ink">Listo por hoy</p>
+        <p className="text-ink-muted">Tu planta te espera en casa.</p>
+        <Link href="/" className="inline-block min-h-12 rounded-2xl bg-primary px-6 py-3 text-surface">
+          Volver al inicio
+        </Link>
+      </main>
+    );
+  }
+
+  const current = exercises[index];
+
+  return (
+    <main className="flex min-h-[80vh] flex-col items-center justify-between py-10 text-center">
+      <p className="text-sm uppercase tracking-widest text-ink-subtle">
+        {mood}
+      </p>
+
+      <div className="flex flex-col items-center gap-8">
+        <div className="relative flex h-64 w-64 items-center justify-center">
+          <motion.div
+            aria-hidden
+            className="absolute inset-0 rounded-full bg-primary-soft"
+            animate={paused ? { scale: 1 } : { scale: [1, 1.18, 1] }}
+            transition={
+              paused
+                ? { duration: 0.4 }
+                : { duration: 8, repeat: Infinity, ease: "easeInOut" }
+            }
+          />
+          <motion.div
+            aria-hidden
+            className="absolute inset-6 rounded-full bg-accent-soft/70"
+            animate={paused ? { scale: 1 } : { scale: [1, 1.12, 1] }}
+            transition={
+              paused
+                ? { duration: 0.4 }
+                : { duration: 8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }
+            }
+          />
+          <h1 className="relative z-10 max-w-[10rem] font-serif text-2xl leading-snug text-ink">
+            {current.name}
+          </h1>
+        </div>
+
+        <p className="text-sm text-ink-muted">
+          Ejercicio {index + 1} de {exercises.length}
+        </p>
+      </div>
+
+      <div className="flex w-full gap-3">
+        <button
+          type="button"
+          onClick={() => setPaused((p) => !p)}
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-raised px-6 font-medium text-ink"
+        >
+          {paused ? <Play className="h-5 w-5" aria-hidden /> : <Pause className="h-5 w-5" aria-hidden />}
+          {paused ? "Reanudar" : "Pausar"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const next = nextIndex(index, exercises.length);
+            if (next === null) setFinished(true);
+            else setIndex(next);
+          }}
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-6 font-medium text-surface"
+        >
+          <SkipForward className="h-5 w-5" aria-hidden />
+          Siguiente movimiento
+        </button>
+      </div>
+    </main>
+  );
+}
