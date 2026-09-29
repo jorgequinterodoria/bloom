@@ -337,14 +337,16 @@ git add -A && git commit -m "feat: API de ejercicios incluye instrucciones e ilu
   });
 
   it("omite la explicación cuando faltan instrucciones o ilustración", async () => {
-    render(<WorkoutPlayer />);
+    const { container } = render(<WorkoutPlayer />);
     expect(await screen.findByText("Respiración profunda")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.queryByText(/inhala/i)).not.toBeInTheDocument();
+    expect(container.querySelector("p.mx-auto.max-w-sm")).toBeNull();
   });
 ```
 
 (El fixture base ya no incluye los campos nuevos → sirve para el test de "faltan datos". `getByRole("progressbar", {name})` requiere `aria-label` en el componente del paso 3.)
+
+**Amendamiento durante la ejecución:** el matcher original `queryByText(/inhala/i)` colisionaba con el párrafo `sr-only` existente ("inhala lentamente"), que sí debe seguir renderizándose; se reemplazó por un selector del párrafo de instrucciones (`p.mx-auto.max-w-sm`), que conserva la intención del test.
 
 **Step 2: Ejecutar → FAIL**
 

@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Pause, Play, SkipForward } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +12,8 @@ import { nextIndex, timeLeftAfterTick } from "./flow";
 interface Exercise {
   name: string;
   durationSeconds: number;
+  instructions?: string | null;
+  illustration?: string | null;
 }
 
 export function WorkoutPlayer() {
@@ -123,7 +126,7 @@ export function WorkoutPlayer() {
         {mood}
       </p>
 
-      <div className="flex flex-col items-center gap-8">
+      <div className="flex flex-col items-center gap-6">
         <p className="sr-only">
           Respira siguiendo el círculo: inhala lentamente y exhala despacio.
         </p>
@@ -153,9 +156,44 @@ export function WorkoutPlayer() {
           </h1>
         </div>
 
+        <div className="w-full max-w-xs space-y-1.5">
+          <p className="text-sm text-ink">{timeLeft} s</p>
+          <div
+            role="progressbar"
+            aria-label="Progreso del ejercicio"
+            aria-valuemin={0}
+            aria-valuemax={current.durationSeconds}
+            aria-valuenow={current.durationSeconds - timeLeft}
+            className="h-2 w-full overflow-hidden rounded-full bg-primary-soft"
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{
+                width: `${((current.durationSeconds - timeLeft) / current.durationSeconds) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+
         <p aria-live="polite" className="text-sm text-ink-muted">
           Ejercicio {index + 1} de {exercises.length}
         </p>
+
+        {current.illustration && (
+          <Image
+            unoptimized
+            src={current.illustration}
+            alt={current.name}
+            width={320}
+            height={160}
+            className="h-40 w-auto"
+          />
+        )}
+        {current.instructions && (
+          <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink-muted">
+            {current.instructions}
+          </p>
+        )}
       </div>
 
       <div className="flex w-full gap-3">

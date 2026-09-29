@@ -104,4 +104,57 @@ describe("WorkoutPlayer", () => {
     fireEvent.click(screen.getByRole("button", { name: /pausar/i }));
     expect(screen.getByRole("button", { name: /reanudar/i })).toBeInTheDocument();
   });
+
+  it("muestra el temporizador y descuenta los segundos", async () => {
+    vi.useFakeTimers();
+    render(<WorkoutPlayer />);
+    await flushLoad();
+
+    expect(screen.getByText("60 s")).toBeInTheDocument();
+    const bar = screen.getByRole("progressbar", { name: /progreso del ejercicio/i });
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.getByText("59 s")).toBeInTheDocument();
+    expect(bar).toHaveAttribute("aria-valuenow", "1");
+  });
+
+  it("muestra la ilustración y las instrucciones del ejercicio", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              mood: "Ansiosa",
+              exercises: [
+                {
+                  name: "Respiración profunda",
+                  durationSeconds: 60,
+                  instructions: "Inhala contando 4 y exhala contando 6.",
+                  illustration: "/exercises/respiracion-profunda.svg",
+                },
+              ],
+            }),
+        }),
+      ),
+    );
+    render(<WorkoutPlayer />);
+    expect(
+      await screen.findByText("Inhala contando 4 y exhala contando 6."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Respiración profunda" }),
+    ).toHaveAttribute("src", "/exercises/respiracion-profunda.svg");
+  });
+
+  it("omite la explicación cuando faltan instrucciones o ilustración", async () => {
+    const { container } = render(<WorkoutPlayer />);
+    expect(await screen.findByText("Respiración profunda")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(container.querySelector("p.mx-auto.max-w-sm")).toBeNull();
+  });
 });
