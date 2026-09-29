@@ -29,6 +29,8 @@ export async function GET(req: Request) {
     exercises: rows.map((r) => ({
       name: r.name,
       durationSeconds: r.durationSeconds,
+      instructions: r.instructions,
+      illustration: r.illustration,
     })),
   });
 }
