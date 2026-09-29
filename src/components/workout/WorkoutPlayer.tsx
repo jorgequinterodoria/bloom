@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Pause, Play, SkipForward } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -23,7 +23,9 @@ export function WorkoutPlayer() {
   const [paused, setPaused] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const postedRef = useRef(false);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     if (!mood) {
@@ -32,7 +34,11 @@ export function WorkoutPlayer() {
     }
     fetch(`/api/exercises?mood=${encodeURIComponent(mood)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setExercises(data.exercises ?? []))
+      .then((data) => {
+        const list: Exercise[] = data.exercises ?? [];
+        setExercises(list);
+        setTimeLeft(list[0]?.durationSeconds ?? 0);
+      })
       .catch(() => setError(true));
   }, [mood]);
 
@@ -41,7 +47,7 @@ export function WorkoutPlayer() {
   }, [exercises, index]);
 
   useEffect(() => {
-    if (paused || finished || !exercises) return;
+    if (paused || finished || !exercises?.length) return;
     const id = setInterval(() => {
       setTimeLeft((left) => timeLeftAfterTick(left));
     }, 1000);
@@ -49,10 +55,14 @@ export function WorkoutPlayer() {
   }, [paused, finished, exercises]);
 
   useEffect(() => {
-    if (!exercises || timeLeft !== 0 || finished) return;
+    if (!exercises?.length || timeLeft !== 0 || finished) return;
     const next = nextIndex(index, exercises.length);
-    if (next === null) setFinished(true);
-    else setIndex(next);
+    if (next === null) {
+      setFinished(true);
+    } else {
+      setIndex(next);
+      setTimeLeft(exercises[next].durationSeconds);
+    }
   }, [timeLeft, exercises, index, finished]);
 
   useEffect(() => {
@@ -62,10 +72,14 @@ export function WorkoutPlayer() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ day: todayKey() }),
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("No se pudo guardar el avance");
+      })
+      .catch(() => setSaveFailed(true));
   }, [finished]);
 
-  if (error || !mood) {
+  if (error || !mood || exercises?.length === 0) {
     return (
       <main className="space-y-6 py-16 text-center">
         <p className="text-ink-muted">No encontramos tu flujo de hoy.</p>
@@ -86,9 +100,14 @@ export function WorkoutPlayer() {
 
   if (finished) {
     return (
-      <main className="space-y-6 py-16 text-center">
+      <main role="status" className="space-y-6 py-16 text-center">
         <p className="font-serif text-3xl text-ink">Listo por hoy</p>
         <p className="text-ink-muted">Tu planta te espera en casa.</p>
+        {saveFailed && (
+          <p role="status" className="text-sm text-ink-muted">
+            No pudimos guardar tu avance.
+          </p>
+        )}
         <Link href="/" className="inline-block min-h-12 rounded-2xl bg-primary px-6 py-3 text-surface">
           Volver al inicio
         </Link>
@@ -105,11 +124,14 @@ export function WorkoutPlayer() {
       </p>
 
       <div className="flex flex-col items-center gap-8">
+        <p className="sr-only">
+          Respira siguiendo el círculo: inhala lentamente y exhala despacio.
+        </p>
         <div className="relative flex h-64 w-64 items-center justify-center">
           <motion.div
             aria-hidden
             className="absolute inset-0 rounded-full bg-primary-soft"
-            animate={paused ? { scale: 1 } : { scale: [1, 1.18, 1] }}
+            animate={reduce ? {} : paused ? { scale: 1 } : { scale: [1, 1.18, 1] }}
             transition={
               paused
                 ? { duration: 0.4 }
@@ -119,7 +141,7 @@ export function WorkoutPlayer() {
           <motion.div
             aria-hidden
             className="absolute inset-6 rounded-full bg-accent-soft/70"
-            animate={paused ? { scale: 1 } : { scale: [1, 1.12, 1] }}
+            animate={reduce ? {} : paused ? { scale: 1 } : { scale: [1, 1.12, 1] }}
             transition={
               paused
                 ? { duration: 0.4 }
@@ -131,7 +153,7 @@ export function WorkoutPlayer() {
           </h1>
         </div>
 
-        <p className="text-sm text-ink-muted">
+        <p aria-live="polite" className="text-sm text-ink-muted">
           Ejercicio {index + 1} de {exercises.length}
         </p>
       </div>
