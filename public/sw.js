@@ -1,5 +1,5 @@
 const CACHE = "bloom-static-v1";
-const STATIC_PREFIXES = ["/_next/static/", "/icons/"];
+const STATIC_PREFIXES = ["/_next/static/", "/icons/", "/exercises/"];
 
 self.addEventListener("install", () => {
   self.skipWaiting();
