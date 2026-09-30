@@ -13,11 +13,19 @@ describe("MOODS", () => {
 });
 
 describe("flujos de ejercicios", () => {
-  it("cada ánimo tiene 3-4 ejercicios de 30-90s", () => {
+  it("cada rutina dura entre 15 y 30 minutos", () => {
     for (const mood of MOODS) {
       const flow = findFlow(mood.name);
-      expect(flow.length).toBeGreaterThanOrEqual(3);
-      expect(flow.length).toBeLessThanOrEqual(4);
+      const total = flow.reduce((sum, ex) => sum + ex.durationSeconds, 0);
+      expect(total).toBeGreaterThanOrEqual(900);
+      expect(total).toBeLessThanOrEqual(1800);
+    }
+  });
+
+  it("cada rutina tiene al menos 10 ejercicios de 30-90 s", () => {
+    for (const mood of MOODS) {
+      const flow = findFlow(mood.name);
+      expect(flow.length).toBeGreaterThanOrEqual(10);
       for (const ex of flow) {
         expect(ex.durationSeconds).toBeGreaterThanOrEqual(30);
         expect(ex.durationSeconds).toBeLessThanOrEqual(90);
