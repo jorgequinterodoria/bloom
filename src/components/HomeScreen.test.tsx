@@ -107,7 +107,7 @@ describe("HomeScreen", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0][0]).toBe("/api/checkin");
     expect(calls[0][1]?.method).toBe("POST");
-    expect(postBody(calls[0])).toEqual({ mood: "Ansiosa", day: todayKey() });
+    expect(postBody(calls[0])).toEqual({ mood: "Ansiosa", day: todayKey(), energy: 3, stress: 3, note: "" });
   });
 
   it("con doble toque rápido solo envía un checkin", async () => {
@@ -246,5 +246,21 @@ describe("HomeScreen", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText(/cargando tu día/i)).not.toBeInTheDocument();
     expect(callsTo("/api/log")).toHaveLength(2);
+  });
+
+  it("muestra un resumen semanal, del mes y recordatorios cuando hay historial local", async () => {
+    const stored = [
+      { date: todayKey(), mood: "Ansiosa", energy: 3, stress: 4, note: "Me he sentido acelerada" },
+      { date: "2026-09-29", mood: "Energética", energy: 4, stress: 2, note: "He mantenido ritmo" },
+      { date: "2026-09-28", mood: "Estresada", energy: 2, stress: 5, note: "Mucho trabajo" },
+    ];
+    localStorage.setItem("bloom-history", JSON.stringify(stored));
+
+    render(<HomeScreen />);
+
+    expect(await screen.findByText(/tu semana/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/racha/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/resumen del mes/i)).toBeInTheDocument();
+    expect(screen.getByText(/recordatorios/i)).toBeInTheDocument();
   });
 });

@@ -10,6 +10,9 @@ export async function GET(req: Request) {
   return NextResponse.json({
     checkedIn: Boolean(log?.moodId),
     moodId: log?.moodId ?? null,
+    energy: typeof log?.energy === "number" ? log.energy : 3,
+    stress: typeof log?.stress === "number" ? log.stress : 3,
+    note: log?.note ?? "",
     workoutDone: log?.workoutDone ?? false,
     weekendRide: log?.isWeekendRide ?? false,
     sosTriggered: log?.sosTriggered ?? false,

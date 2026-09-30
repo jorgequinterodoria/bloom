@@ -49,6 +49,9 @@ export const dailyLogs = pgTable(
       .references(() => users.id)
       .notNull(),
     moodId: uuid("mood_id").references(() => moods.id),
+    energy: integer("energy").default(3).notNull(),
+    stress: integer("stress").default(3).notNull(),
+    note: text("note"),
     workoutDone: boolean("workout_done").default(false).notNull(),
     isWeekendRide: boolean("is_weekend_ride").default(false).notNull(),
     sosTriggered: boolean("sos_triggered").default(false).notNull(),

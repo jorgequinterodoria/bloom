@@ -101,6 +101,13 @@ export function WorkoutPlayer() {
     );
   }
 
+  const moodSummary: Record<string, string> = {
+    Estresada: "Hoy tu objetivo es soltar tensión con calma y sin empujones.",
+    Ansiosa: "Hoy prioriza una respiración lenta y un ritmo suave.",
+    Energética: "Tu energía está buena; usa ese impulso con movimientos controlados.",
+    "Sin motivación": "Empieza con lo mínimo y deja que la rutina te dé impulso.",
+  };
+
   if (finished) {
     return (
       <main className="space-y-6 py-16 text-center">
@@ -125,6 +132,13 @@ export function WorkoutPlayer() {
       <p className="text-sm uppercase tracking-widest text-ink-subtle">
         {mood}
       </p>
+
+      <div className="w-full max-w-md rounded-3xl bg-primary-soft p-4 text-left">
+        <p className="text-xs uppercase tracking-[0.18em] text-primary-deep">Tu sesión</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+          {moodSummary[mood] ?? "Hoy le das un pequeño paso con atención y sin exigirte mucho."}
+        </p>
+      </div>
 
       <div className="flex flex-col items-center gap-6">
         <p className="sr-only">
