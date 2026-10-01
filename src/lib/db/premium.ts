@@ -34,7 +34,10 @@ export async function getRecentLogs(userId: string, days = 30) {
   return rows.slice(0, Math.min(Math.max(days, 1), 90));
 }
 
-export async function createWorkoutSession(userId: string, values: typeof workoutSessions.$inferInsert) {
+export async function createWorkoutSession(
+  userId: string,
+  values: Omit<typeof workoutSessions.$inferInsert, "userId">,
+) {
   const [session] = await db.insert(workoutSessions).values({ ...values, userId }).returning();
   return session;
 }

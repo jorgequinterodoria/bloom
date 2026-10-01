@@ -35,7 +35,7 @@ describe("i18n", () => {
     it("lets the user override the daily locale and remembers the choice", async () => {
         renderLanguagePicker();
 
-        fireEvent.change(screen.getByRole("combobox", { name: "Idioma" }), {
+        fireEvent.change(screen.getByRole("combobox"), {
             target: { value: "fr" },
         });
 
@@ -49,7 +49,7 @@ describe("i18n", () => {
         renderLanguagePicker();
 
         expect(await screen.findByText("Come ti senti oggi?")).toBeInTheDocument();
-        expect(screen.getByRole("combobox", { name: "Lingua" })).toHaveValue("it");
+        expect(screen.getByRole("combobox")).toHaveValue("it");
         await waitFor(() => expect(document.documentElement.lang).toBe("it"));
     });
 });

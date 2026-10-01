@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { todayKey } from "@/lib/utils";
 import HomeScreen from "./HomeScreen";
 
 const { push, signOutMock, isWeekendDayMock } = vi.hoisted(() => ({ push: vi.fn(), signOutMock: vi.fn(), isWeekendDayMock: vi.fn(() => false) }));

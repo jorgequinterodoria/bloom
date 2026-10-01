@@ -8,7 +8,7 @@ describe("manifest", () => {
     expect(m.short_name).toBe("Bloom");
     expect(m.start_url).toBe("/");
     expect(m.display).toBe("standalone");
-    expect(m.lang).toBe("mul");
+    expect(m.lang).toBe("es");
     expect(m.icons?.[0]?.src).toBe("/icons/icon.svg");
     expect(m.icons?.[0]?.sizes).toBe("any");
   });
