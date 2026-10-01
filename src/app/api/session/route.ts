@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordLog, requireUserId, resolveDayKey } from "@/lib/db/queries";
-import { completeWorkoutSession, createWorkoutSession, syncAchievements } from "@/lib/db/premium";
+import { completeWorkoutSession, createWorkoutSession, syncAchievements, trackWellnessEvent } from "@/lib/db/premium";
 
 const clamp = (value: unknown, fallback = 3) => {
   const number = Number(value);
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       totalExercises,
       exercisesCompleted: 0,
     });
+    await trackWellnessEvent(userId, "session_started", { duration: durationSeconds, exercises: totalExercises });
     return NextResponse.json({ ok: true, sessionId: session.id });
   }
 
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
     });
     if (!session) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
     await recordLog(userId, session.dayKey, { workoutDone: true });
-    await syncAchievements(userId);
+    await Promise.all([syncAchievements(userId), trackWellnessEvent(userId, "session_completed", { duration: session.durationSeconds, exercises: session.exercisesCompleted })]);
+    await trackWellnessEvent(userId, "session_after_checkin", { stressDelta: (session.afterStress ?? session.beforeStress) - session.beforeStress, energyDelta: (session.afterEnergy ?? session.beforeEnergy) - session.beforeEnergy });
     return NextResponse.json({ ok: true, session });
   }
 

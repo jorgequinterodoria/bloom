@@ -12,7 +12,7 @@ interface Progress { stage: number; careDays: number; minutes: number; completed
 export function GardenScreen() {
   const { t } = useI18n();
   const [progress, setProgress] = useState<Progress | null>(null);
-  useEffect(() => { fetch("/api/plant").then((r) => r.json()).then(setProgress).catch(() => undefined); }, []);
+  useEffect(() => { fetch("/api/plant").then((r) => r.json()).then(setProgress).catch(() => undefined); void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "garden_opened" }) }); }, []);
 
   const stage = progress?.stage ?? 0;
   const nextTarget = useMemo(() => Math.min(MAX_PLANT_STAGE, stage + (stage < 3 ? 3 : stage < 6 ? 3 : 4)), [stage]);

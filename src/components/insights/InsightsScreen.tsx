@@ -4,12 +4,15 @@ import { ArrowDownRight, ArrowUpRight, CalendarDays, Clock3, HeartPulse, Sparkle
 import { useEffect, useMemo, useState } from "react";
 import { translatedMood, useI18n } from "@/lib/i18n";
 
+interface UsageData { [key: string]: number; }
+
 interface InsightData {
   periodDays: number;
   totals: { checkins: number; sessions: number; workoutMinutes: number };
   averages: { energy: number; stress: number };
   deltas: { energy: number; stress: number };
   patterns: { stressHighDays: number; favoriteMood: Record<string, number> };
+  impact: { avgStressDelta: number; avgEnergyDelta: number; measuredSessions: number; helpedSessions: number };
   sessions: Array<{ id: string; dayKey: string; mood: string; durationSeconds: number; beforeStress: number; afterStress: number | null; beforeEnergy: number; afterEnergy: number | null }>;
   series: Array<{ dayKey: string; energy: number; stress: number }>;
 }
@@ -20,10 +23,13 @@ export function InsightsScreen() {
   const [range, setRange] = useState(30);
   const [goal, setGoal] = useState<{ type: string; target: number } | null>(null);
   const [goalBusy, setGoalBusy] = useState(false);
+  const [usage, setUsage] = useState<UsageData | null>(null);
 
   useEffect(() => {
+    void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "insights_opened" }) }).catch(() => undefined);
     fetch(`/api/insights?days=${range}`).then((response) => response.json()).then(setData).catch(() => setData(null));
     fetch("/api/goals").then((response) => response.json()).then((value) => setGoal(value.goals?.[0] ?? null)).catch(() => undefined);
+    fetch("/api/analytics").then((response) => response.json()).then((value) => setUsage(value.events ?? null)).catch(() => undefined);
   }, [range]);
 
   const favoriteMood = useMemo(() => {
@@ -58,6 +64,25 @@ export function InsightsScreen() {
       <section className="grid grid-cols-2 gap-3">
         <div className="rounded-3xl bg-primary-soft p-4"><Clock3 className="h-5 w-5 text-primary-deep" aria-hidden /><p className="mt-4 text-xs text-ink-muted">{t("movementMinutes")}</p><p className="mt-1 font-serif text-3xl text-ink">{data.totals.workoutMinutes}</p></div>
         <div className="rounded-3xl bg-accent-soft p-4"><HeartPulse className="h-5 w-5 text-bloom" aria-hidden /><p className="mt-4 text-xs text-ink-muted">{t("sessionsCount")}</p><p className="mt-1 font-serif text-3xl text-ink">{data.totals.sessions}</p></div>
+      </section>
+
+      {usage && <section className="rounded-[30px] bg-surface-muted p-5">
+        <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary-deep" aria-hidden /><h2 className="font-serif text-2xl text-ink">{t("bloomRhythm")}</h2></div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="rounded-2xl bg-surface p-3"><p className="text-xs text-ink-muted">{t("completedSessions")}</p><p className="mt-1 font-serif text-2xl text-ink">{usage.session_completed ?? 0}</p></div>
+          <div className="rounded-2xl bg-surface p-3"><p className="text-xs text-ink-muted">Coach</p><p className="mt-1 font-serif text-2xl text-ink">{usage.coach_message_sent ?? 0}</p></div>
+          <div className="rounded-2xl bg-surface p-3"><p className="text-xs text-ink-muted">{t("soundscapesShort")}</p><p className="mt-1 font-serif text-2xl text-ink">{usage.soundscape_started ?? 0}</p></div>
+        </div>
+      </section>}
+
+      <section className="rounded-[30px] bg-surface-muted p-5">
+        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-bloom" aria-hidden /><h2 className="font-serif text-2xl text-ink">{t("impactTitle")}</h2></div>
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t("impactSubtitle")}</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-surface p-3"><p className="text-xs text-ink-muted">{t("stressChange")}</p><p className={`mt-1 font-serif text-2xl ${data.impact.avgStressDelta < 0 ? "text-primary-deep" : "text-bloom"}`}>{data.impact.avgStressDelta > 0 ? "+" : ""}{data.impact.avgStressDelta.toFixed(1)}</p></div>
+          <div className="rounded-2xl bg-surface p-3"><p className="text-xs text-ink-muted">{t("energyChange")}</p><p className={`mt-1 font-serif text-2xl ${data.impact.avgEnergyDelta > 0 ? "text-primary-deep" : "text-bloom"}`}>{data.impact.avgEnergyDelta > 0 ? "+" : ""}{data.impact.avgEnergyDelta.toFixed(1)}</p></div>
+        </div>
+        <p className="mt-3 text-xs text-ink-muted">{t("helpedSessions", { count: data.impact.helpedSessions, total: data.impact.measuredSessions })}</p>
       </section>
 
       <section className="rounded-[32px] bg-ink p-5 text-surface">

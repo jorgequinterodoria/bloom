@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Flower2, Home, PersonStanding } from "lucide-react";
+import { BarChart3, Bot, Flower2, Home, PersonStanding } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
@@ -13,11 +13,12 @@ export function AppNav() {
     { href: "/move", label: t("navMove"), icon: PersonStanding },
     { href: "/garden", label: t("navGarden"), icon: Flower2 },
     { href: "/insights", label: t("navInsights"), icon: BarChart3 },
+    { href: "/coach", label: t("navCoach"), icon: Bot },
   ];
 
   return (
     <nav aria-label="Bloom" className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] max-w-[406px] -translate-x-1/2 rounded-[28px] border border-white/70 bg-surface/90 p-2 shadow-[0_18px_50px_-24px_rgba(60,70,60,.5)] backdrop-blur-xl">
-      <div className="grid grid-cols-4 gap-1">
+      <div className="grid grid-cols-5 gap-1">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/" && pathname.startsWith(href));
           return (

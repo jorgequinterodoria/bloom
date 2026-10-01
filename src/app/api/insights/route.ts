@@ -23,12 +23,18 @@ export async function GET(req: Request) {
   const deltaEnergy = previousEnergy && currentEnergy ? Math.round((currentEnergy - previousEnergy) * 10) / 10 : 0;
   const workoutMinutes = Math.round(completed.reduce((sum, session) => sum + session.durationSeconds, 0) / 60);
   const stressHighDays = logs.filter((x) => x.stress >= 4).length;
+  const measured = completed.filter((session) => session.afterStress !== null || session.afterEnergy !== null);
+  const avgDelta = (values: number[]) => values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : 0;
+  const stressDeltas = measured.filter((session) => session.afterStress !== null).map((session) => session.afterStress! - session.beforeStress);
+  const energyDeltas = measured.filter((session) => session.afterEnergy !== null).map((session) => session.afterEnergy! - session.beforeEnergy);
+  const helpedSessions = measured.filter((session) => (session.afterStress ?? session.beforeStress) < session.beforeStress || (session.afterEnergy ?? session.beforeEnergy) > session.beforeEnergy).length;
 
   return NextResponse.json({
     periodDays: days,
     totals: { checkins: logs.length, sessions: completed.length, workoutMinutes },
     averages: { energy: avg(energy), stress: avg(stress) },
     deltas: { energy: deltaEnergy, stress: deltaStress },
+    impact: { avgStressDelta: avgDelta(stressDeltas), avgEnergyDelta: avgDelta(energyDeltas), measuredSessions: measured.length, helpedSessions },
     patterns: {
       stressHighDays,
       favoriteMood: logs.reduce<Record<string, number>>((acc, item) => {

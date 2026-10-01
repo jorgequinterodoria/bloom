@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -117,6 +118,23 @@ export const achievements = pgTable("achievements", {
   description: text("description").notNull(),
 });
 
+
+export const coachMessages = pgTable("coach_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  role: varchar("role", { length: 20 }).notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const wellnessEvents = pgTable("wellness_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  eventName: varchar("event_name", { length: 80 }).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, string | number | boolean | null>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const userAchievements = pgTable("user_achievements", {
   userId: uuid("user_id").references(() => users.id).notNull(),
   achievementId: varchar("achievement_id", { length: 60 }).references(() => achievements.id).notNull(),
@@ -132,6 +150,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   workoutSessions: many(workoutSessions),
   goals: many(userGoals),
   achievements: many(userAchievements),
+  coachMessages: many(coachMessages),
+  wellnessEvents: many(wellnessEvents),
 }));
 
 export const moodsRelations = relations(moods, ({ many }) => ({
@@ -179,6 +199,14 @@ export const userGoalsRelations = relations(userGoals, ({ one }) => ({
     fields: [userGoals.userId],
     references: [users.id],
   }),
+}));
+
+export const coachMessagesRelations = relations(coachMessages, ({ one }) => ({
+  user: one(users, { fields: [coachMessages.userId], references: [users.id] }),
+}));
+
+export const wellnessEventsRelations = relations(wellnessEvents, ({ one }) => ({
+  user: one(users, { fields: [wellnessEvents.userId], references: [users.id] }),
 }));
 
 export const userAchievementsRelations = relations(userAchievements, ({ one }) => ({

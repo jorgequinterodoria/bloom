@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from ".";
-import { achievements, dailyLogs, moods, plantStages, userAchievements, userGoals, userProfiles, workoutSessions } from "./schema";
+import { achievements, coachMessages, dailyLogs, moods, plantStages, userAchievements, userGoals, userProfiles, wellnessEvents, workoutSessions } from "./schema";
 
 export type Focus = "stress" | "energy" | "movement" | "balance";
 
@@ -113,4 +113,31 @@ export async function getAchievements(userId: string) {
     .innerJoin(achievements, eq(userAchievements.achievementId, achievements.id))
     .where(eq(userAchievements.userId, userId))
     .orderBy(desc(userAchievements.unlockedAt));
+}
+
+
+export async function createCoachMessage(userId: string, role: "user" | "assistant", message: string) {
+  const [row] = await db.insert(coachMessages).values({ userId, role, message: message.slice(0, 500) }).returning();
+  return row;
+}
+
+export async function getCoachMessages(userId: string, limit = 20) {
+  return db.select({ role: coachMessages.role, message: coachMessages.message, createdAt: coachMessages.createdAt })
+    .from(coachMessages)
+    .where(eq(coachMessages.userId, userId))
+    .orderBy(desc(coachMessages.createdAt))
+    .limit(Math.min(Math.max(limit, 1), 50))
+    .then((rows) => rows.reverse());
+}
+
+export async function trackWellnessEvent(userId: string, eventName: string, metadata?: Record<string, string | number | boolean | null>) {
+  await db.insert(wellnessEvents).values({ userId, eventName: eventName.slice(0, 80), metadata });
+}
+
+export async function getWellnessEventCounts(userId: string) {
+  const rows = await db.select({ eventName: wellnessEvents.eventName, count: sql<number>`count(*)` })
+    .from(wellnessEvents)
+    .where(eq(wellnessEvents.userId, userId))
+    .groupBy(wellnessEvents.eventName);
+  return Object.fromEntries(rows.map((row) => [row.eventName, Number(row.count)]));
 }
