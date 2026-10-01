@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 export default function RegisterForm() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,9 +27,14 @@ export default function RegisterForm() {
       const data = (await res.json().catch(() => null)) as {
         error?: string;
       } | null;
-      setError(data?.error ?? "No se pudo crear la cuenta.");
+      const apiErrors: Record<string, string> = {
+        "Correo inválido.": t("invalidEmail"),
+        "La contraseña debe tener al menos 8 caracteres.": t("shortPassword"),
+        "Ese correo ya está registrado.": t("emailTaken"),
+      };
+      setError((data?.error && apiErrors[data.error]) || t("registerError"));
     } catch {
-      setError("No se pudo crear la cuenta.");
+      setError(t("registerError"));
     } finally {
       setLoading(false);
     }
@@ -36,7 +43,7 @@ export default function RegisterForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <label className="block space-y-2">
-        <span className="text-sm text-ink-muted">Correo</span>
+        <span className="text-sm text-ink-muted">{t("email")}</span>
         <input
           type="email"
           required
@@ -46,7 +53,7 @@ export default function RegisterForm() {
         />
       </label>
       <label className="block space-y-2">
-        <span className="text-sm text-ink-muted">Contraseña</span>
+        <span className="text-sm text-ink-muted">{t("password")}</span>
         <input
           type="password"
           required
@@ -56,7 +63,7 @@ export default function RegisterForm() {
           className="min-h-12 w-full rounded-2xl border border-surface-raised bg-surface-raised px-4 text-ink outline-none focus:border-primary"
         />
         <span className="block text-xs text-ink-subtle">
-          Mínimo 8 caracteres.
+          {t("minPassword")}
         </span>
       </label>
       {error && <p className="text-sm text-bloom">{error}</p>}
@@ -65,7 +72,7 @@ export default function RegisterForm() {
         disabled={loading}
         className="min-h-12 w-full rounded-2xl bg-primary px-6 font-medium text-surface disabled:opacity-60"
       >
-        {loading ? "Creando…" : "Crear cuenta"}
+        {loading ? t("creatingAccount") : t("createAccount")}
       </button>
     </form>
   );

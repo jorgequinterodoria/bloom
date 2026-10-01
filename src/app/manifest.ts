@@ -5,12 +5,12 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Bloom — movimiento sin prisa",
     short_name: "Bloom",
     description:
-      "Registro de ánimo y movimiento suave. Tu planta crece con cada check-in.",
+      "Bloom",
     start_url: "/",
     display: "standalone",
     background_color: "#f7f4ee",
     theme_color: "#f7f4ee",
-    lang: "es-419",
+    lang: "mul",
     icons: [
       {
         src: "/icons/icon.svg",

@@ -1,6 +1,7 @@
 "use client";
 
 import { MOODS, WEEKEND_ICON, type MoodName } from "@/lib/constants";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   weekend: boolean;
@@ -10,22 +11,23 @@ interface Props {
 }
 
 export function MoodButtons({ weekend, onSelect, onRide, disabled }: Props) {
+  const { t } = useI18n();
   if (weekend) {
     const Bike = WEEKEND_ICON;
     const ideas = [
-      { label: "Paseo corto", detail: "10–15 min con aire libre" },
-      { label: "Bici suave", detail: "Movimiento tranquilo y constante" },
-      { label: "Descanso activo", detail: "Caminar sin prisa y respirar" },
+      { label: t("shortWalk"), detail: t("freshAir") },
+      { label: t("easyBike"), detail: t("steadyMovement") },
+      { label: t("activeRest"), detail: t("unhurriedWalk") },
     ];
 
     return (
-      <section aria-label="Fin de semana" className="space-y-4 rounded-3xl bg-accent-soft p-6">
+      <section aria-label={t("weekendAria")} className="space-y-4 rounded-3xl bg-accent-soft p-6">
         <div className="flex items-center gap-3">
           <Bike className="h-6 w-6 text-bloom" aria-hidden />
-          <h2 className="font-serif text-xl text-ink">Fin de semana</h2>
+          <h2 className="font-serif text-xl text-ink">{t("weekend")}</h2>
         </div>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Un paseo al aire libre también hace crecer tu planta. Elige la forma que mejor te siente.
+          {t("weekendIntro")}
         </p>
 
         <div className="space-y-2">
@@ -52,16 +54,20 @@ export function MoodButtons({ weekend, onSelect, onRide, disabled }: Props) {
           disabled={disabled}
           className="min-h-12 w-full rounded-2xl bg-primary px-6 font-medium text-surface disabled:opacity-60"
         >
-          Registrar paseo del fin de semana
+          {t("recordRide")}
         </button>
       </section>
     );
   }
 
   return (
-    <section aria-label="Registro de ánimo" className="grid grid-cols-2 gap-3">
+    <section aria-label={t("moodAria")} className="grid grid-cols-2 gap-3">
       {MOODS.map((mood) => {
         const Icon = mood.icon;
+        const moodText = mood.name === "Estresada" ? [t("moodStressed"), t("moodStressedHint")]
+          : mood.name === "Ansiosa" ? [t("moodAnxious"), t("moodAnxiousHint")]
+            : mood.name === "Energética" ? [t("moodEnergetic"), t("moodEnergeticHint")]
+              : [t("moodUnmotivated"), t("moodUnmotivatedHint")];
         return (
           <button
             key={mood.name}
@@ -72,8 +78,8 @@ export function MoodButtons({ weekend, onSelect, onRide, disabled }: Props) {
           >
             <Icon className="h-6 w-6 text-primary-deep" aria-hidden />
             <span>
-              <span className="block font-medium">{mood.label}</span>
-              <span className="block text-xs text-ink">{mood.hint}</span>
+              <span className="block font-medium">{moodText[0]}</span>
+              <span className="block text-xs text-ink">{moodText[1]}</span>
             </span>
           </button>
         );

@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useSpring, animated } from "@react-spring/web";
 import { MAX_PLANT_STAGE, plantState } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   stage: number;
 }
 
 export function PlantGrowth({ stage }: Props) {
+  const { t } = useI18n();
   const state = plantState(stage);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -29,7 +31,7 @@ export function PlantGrowth({ stage }: Props) {
   return (
     <svg
       role="img"
-      aria-label={`Planta de Bloom — etapa ${stage} de ${MAX_PLANT_STAGE}`}
+      aria-label={t("plantAlt", { stage, max: MAX_PLANT_STAGE })}
       viewBox="0 0 200 220"
       className="h-64 w-full max-w-[280px]"
     >

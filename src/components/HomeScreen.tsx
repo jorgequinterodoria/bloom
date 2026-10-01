@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoodButtons } from "@/components/mood/MoodButtons";
 import { PlantGrowth } from "@/components/plant/PlantGrowth";
 import { SOSModal } from "@/components/sos/SOSModal";
+import { translatedMood, useI18n } from "@/lib/i18n";
 import { isWeekendDay, todayKey } from "@/lib/utils";
 
 interface DayLog {
@@ -59,7 +60,8 @@ function getStreak(entries: HistoryEntry[]) {
   return streak;
 }
 
-function buildWeeklySummary(entries: HistoryEntry[]) {
+function buildWeeklySummary(entries: HistoryEntry[], locale: string, noRecord: string) {
+  const dateLocale = { es: "es-ES", fr: "fr-FR", pt: "pt-BR", en: "en-US", it: "it-IT" }[locale] ?? "es-ES";
   const points = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
@@ -67,9 +69,9 @@ function buildWeeklySummary(entries: HistoryEntry[]) {
     const key = todayKey(date);
     const match = entries.find((entry) => entry.date === key);
     return {
-      label: new Intl.DateTimeFormat("es-ES", { weekday: "short" }).format(date),
+      label: new Intl.DateTimeFormat(dateLocale, { weekday: "short" }).format(date),
       key,
-      mood: match?.mood ?? "Sin registro",
+      mood: match?.mood ?? noRecord,
       energy: match?.energy ?? 0,
       stress: match?.stress ?? 0,
     };
@@ -83,11 +85,11 @@ function buildWeeklySummary(entries: HistoryEntry[]) {
     streak: getStreak(entries),
     avgEnergy: energyValues.length ? Math.round((energyValues.reduce((a, b) => a + b, 0) / energyValues.length) * 10) / 10 : 0,
     avgStress: stressValues.length ? Math.round((stressValues.reduce((a, b) => a + b, 0) / stressValues.length) * 10) / 10 : 0,
-    bestDay: points.filter((point) => point.mood !== "Sin registro").slice(-1)[0]?.mood ?? "Sin registro",
+    bestDay: points.filter((point) => point.mood !== noRecord).slice(-1)[0]?.mood ?? noRecord,
   };
 }
 
-function buildMonthlySummary(entries: HistoryEntry[]) {
+function buildMonthlySummary(entries: HistoryEntry[], noData: string) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -115,11 +117,12 @@ function buildMonthlySummary(entries: HistoryEntry[]) {
     completionRate,
     avgEnergy: energyValues.length ? Math.round((energyValues.reduce((a, b) => a + b, 0) / energyValues.length) * 10) / 10 : 0,
     avgStress: stressValues.length ? Math.round((stressValues.reduce((a, b) => a + b, 0) / stressValues.length) * 10) / 10 : 0,
-    bestMood: bestMood ? bestMood[0] : "Sin datos",
+    bestMood: bestMood ? bestMood[0] : noData,
   };
 }
 
 export default function HomeScreen() {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const [weekend, setWeekend] = useState(false);
   const [stage, setStage] = useState(0);
@@ -211,58 +214,58 @@ export default function HomeScreen() {
     });
   }, [energy, note, stress]);
 
-  const weeklySummary = useMemo(() => buildWeeklySummary(history), [history]);
-  const monthlySummary = useMemo(() => buildMonthlySummary(history), [history]);
+  const weeklySummary = useMemo(() => buildWeeklySummary(history, locale, t("noRecord")), [history, locale, t]);
+  const monthlySummary = useMemo(() => buildMonthlySummary(history, t("noData")), [history, t]);
 
   const reminderText = useMemo(() => {
-    if (weeklySummary.streak >= 3) return "Muy buena racha: mantén la constancia.";
-    if (weeklySummary.avgStress >= 4) return "Hoy parece un día con más carga. Un pequeño movimiento suave puede ayudar.";
-    return "Un minuto de pausa hoy también cuenta como progreso.";
-  }, [weeklySummary.avgStress, weeklySummary.streak]);
+    if (weeklySummary.streak >= 3) return t("reminderStreak");
+    if (weeklySummary.avgStress >= 4) return t("reminderStress");
+    return t("reminderPause");
+  }, [t, weeklySummary.avgStress, weeklySummary.streak]);
 
   const notifications = useMemo(() => {
     const items: { title: string; body: string; tone: "good" | "warn" }[] = [];
 
     if (weeklySummary.streak >= 3) {
-      items.push({ title: "Constancia", body: "Tu racha está bien: sigue registrando aunque sea un pequeño paso.", tone: "good" });
+      items.push({ title: t("consistency"), body: t("streakMessage"), tone: "good" });
     }
 
     if (monthlySummary.completionRate >= 60) {
-      items.push({ title: "Meta del mes", body: `Llevas ${monthlySummary.completionRate}% del mes completado.`, tone: "good" });
+      items.push({ title: t("monthlyGoal"), body: t("monthComplete", { rate: monthlySummary.completionRate }), tone: "good" });
     } else {
-      items.push({ title: "Pista útil", body: "Tres minutos de movimiento suave hoy te ayudan a sostener mejor el resto del día.", tone: "warn" });
+      items.push({ title: t("usefulHint"), body: t("gentleMovement"), tone: "warn" });
     }
 
     if (weeklySummary.avgStress >= 4) {
-      items.push({ title: "Carga alta", body: "Tu nivel de estrés está elevado. Un paseo corto puede marcar la diferencia.", tone: "warn" });
+      items.push({ title: t("highLoad"), body: t("highStressMessage"), tone: "warn" });
     }
 
     return items.slice(0, 3);
-  }, [monthlySummary.completionRate, weeklySummary.avgStress, weeklySummary.streak]);
+  }, [monthlySummary.completionRate, t, weeklySummary.avgStress, weeklySummary.streak]);
 
   const goalCards = useMemo(() => {
     const cards: Array<{ label: string; ok: boolean; detail: string }> = [];
 
     if (weeklySummary.streak >= 3) {
-      cards.push({ label: "Racha sólida", ok: true, detail: "Ya llevas varios días de constancia." });
+      cards.push({ label: t("solidStreak"), ok: true, detail: t("severalDays") });
     } else {
-      cards.push({ label: "Racha", ok: false, detail: "Registra hoy para empezar tu constancia." });
+      cards.push({ label: t("streak"), ok: false, detail: t("startStreak") });
     }
 
     if (weeklySummary.avgEnergy >= 3) {
-      cards.push({ label: "Energía estable", ok: true, detail: "Tu energía media está en buen nivel." });
+      cards.push({ label: t("stableEnergy"), ok: true, detail: t("energyGood") });
     } else {
-      cards.push({ label: "Re-carga", ok: false, detail: "Un descanso o paseo suave te puede ayudar." });
+      cards.push({ label: t("recharge"), ok: false, detail: t("energyRest") });
     }
 
     if (weeklySummary.avgStress <= 3) {
-      cards.push({ label: "Carga controlada", ok: true, detail: "La tensión media está rebajada." });
+      cards.push({ label: t("controlledLoad"), ok: true, detail: t("stressReduced") });
     } else {
-      cards.push({ label: "Respira", ok: false, detail: "Bonus de 5 minutos para aliviar la presión." });
+      cards.push({ label: t("breathe"), ok: false, detail: t("stressRelease") });
     }
 
     return cards.slice(0, 3);
-  }, [weeklySummary.avgEnergy, weeklySummary.avgStress, weeklySummary.streak]);
+  }, [t, weeklySummary.avgEnergy, weeklySummary.avgStress, weeklySummary.streak]);
 
   const handleMood = useCallback(
     async (mood: string) => {
@@ -285,7 +288,7 @@ export default function HomeScreen() {
         setBusy(false);
       }
     },
-    [persistTodayEntry, router],
+    [energy, note, persistTodayEntry, router, stress],
   );
 
   const handleRide = useCallback(async () => {
@@ -322,14 +325,14 @@ export default function HomeScreen() {
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm uppercase tracking-widest text-ink-subtle">Bloom</p>
-          <h1 className="font-serif text-3xl leading-tight text-ink">¿Cómo te sientes hoy?</h1>
+          <h1 className="font-serif text-3xl leading-tight text-ink">{t("homeTitle")}</h1>
         </div>
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="min-h-12 rounded-2xl px-4 text-sm text-ink-muted underline"
         >
-          Salir
+          {t("signOut")}
         </button>
       </header>
 
@@ -341,21 +344,21 @@ export default function HomeScreen() {
         <div className="rounded-3xl bg-primary-soft p-4">
           <div className="flex items-center gap-2 text-sm text-ink-muted">
             <TrendingUp className="h-4 w-4 text-primary-deep" aria-hidden />
-            <span>Racha</span>
+            <span>{t("streak")}</span>
           </div>
-          <p className="mt-2 text-2xl font-serif text-ink">{weeklySummary.streak} días</p>
+          <p className="mt-2 text-2xl font-serif text-ink">{weeklySummary.streak} {t("days")}</p>
         </div>
         <div className="rounded-3xl bg-accent-soft p-4">
           <div className="flex items-center gap-2 text-sm text-ink-muted">
             <SunMedium className="h-4 w-4 text-bloom" aria-hidden />
-            <span>Energía</span>
+            <span>{t("energy")}</span>
           </div>
           <p className="mt-2 text-2xl font-serif text-ink">{weeklySummary.avgEnergy || 0}/5</p>
         </div>
         <div className="rounded-3xl bg-surface-muted p-4">
           <div className="flex items-center gap-2 text-sm text-ink-muted">
             <Bell className="h-4 w-4 text-ink-muted" aria-hidden />
-            <span>Recordatorio</span>
+            <span>{t("reminder")}</span>
           </div>
           <p className="mt-2 text-sm font-medium text-ink">{reminderText}</p>
         </div>
@@ -364,17 +367,17 @@ export default function HomeScreen() {
       {log === null ? (
         logError ? (
           <div className="space-y-4 text-center">
-            <p role="alert" className="text-sm text-ink">No pudimos cargar tu día.</p>
+            <p role="alert" className="text-sm text-ink">{t("loadDayError")}</p>
             <button
               type="button"
               onClick={loadLog}
               className="min-h-12 rounded-2xl bg-primary px-4 text-sm text-surface"
             >
-              Reintentar
+              {t("retry")}
             </button>
           </div>
         ) : (
-          <p role="status" className="text-center text-sm text-ink-muted">Cargando tu día…</p>
+          <p role="status" className="text-center text-sm text-ink-muted">{t("loadingDay")}</p>
         )
       ) : (
         <>
@@ -386,7 +389,7 @@ export default function HomeScreen() {
               ref={confirmRef}
               className="rounded-3xl bg-primary-soft p-5 text-center text-ink"
             >
-              Gracias por registrar cómo te sientes. Tu planta ha crecido un poco más.
+              {t("checkinThanks")}
             </p>
           )}
 
@@ -406,7 +409,7 @@ export default function HomeScreen() {
               ref={confirmRef}
               className="rounded-3xl bg-accent-soft p-5 text-center text-ink"
             >
-              Paseo registrado. Disfruta el resto del fin de semana.
+              {t("rideThanks")}
             </p>
           )}
         </>
@@ -416,11 +419,11 @@ export default function HomeScreen() {
         <section className="rounded-3xl bg-surface-muted p-5">
           <div className="flex items-center gap-2 text-ink">
             <CalendarHeart className="h-5 w-5 text-primary-deep" aria-hidden />
-            <h2 className="font-serif text-xl">Qué está pasando hoy</h2>
+            <h2 className="font-serif text-xl">{t("todayContext")}</h2>
           </div>
           <div className="mt-4 space-y-4">
             <label className="block text-sm text-ink-muted">
-              Energía: <span className="font-medium text-ink">{energy}/5</span>
+              {t("energy")}: <span className="font-medium text-ink">{energy}/5</span>
               <input
                 type="range"
                 min={1}
@@ -431,7 +434,7 @@ export default function HomeScreen() {
               />
             </label>
             <label className="block text-sm text-ink-muted">
-              Estrés: <span className="font-medium text-ink">{stress}/5</span>
+              {t("stress")}: <span className="font-medium text-ink">{stress}/5</span>
               <input
                 type="range"
                 min={1}
@@ -442,12 +445,12 @@ export default function HomeScreen() {
               />
             </label>
             <label className="block text-sm text-ink-muted">
-              Nota breve
+              {t("shortNote")}
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
-                placeholder="Añade un detalle útil para tu día"
+                placeholder={t("notePlaceholder")}
                 className="mt-2 w-full rounded-2xl border border-sage-300 bg-surface p-3 text-ink placeholder:text-ink-muted"
               />
             </label>
@@ -461,10 +464,10 @@ export default function HomeScreen() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-ink">
                 <Sparkles className="h-5 w-5 text-bloom" aria-hidden />
-                <h2 className="font-serif text-xl">Tu semana</h2>
+                <h2 className="font-serif text-xl">{t("week")}</h2>
               </div>
               <span className="rounded-full bg-primary-soft px-2 py-1 text-xs font-medium text-primary-deep">
-                Racha {weeklySummary.streak} días
+                {t("streakDays", { count: weeklySummary.streak })}
               </span>
             </div>
 
@@ -475,9 +478,9 @@ export default function HomeScreen() {
                   <div key={point.key} className="flex flex-col items-center gap-2">
                     <div className="flex h-16 w-full items-end justify-center rounded-2xl bg-surface p-1">
                       <div
-                        className={point.mood === "Sin registro" ? "w-full rounded-xl bg-surface-muted" : "w-full rounded-xl bg-primary"}
+                        className={point.mood === t("noRecord") ? "w-full rounded-xl bg-surface-muted" : "w-full rounded-xl bg-primary"}
                         style={{ height: `${height}px` }}
-                        title={point.mood === "Sin registro" ? "Sin registro" : `${point.mood} · energía ${point.energy}`}
+                        title={point.mood === t("noRecord") ? t("noRecord") : `${translatedMood(point.mood, locale, t)} · ${t("energy").toLowerCase()} ${point.energy}`}
                       />
                     </div>
                     <span className="text-[10px] uppercase tracking-wide text-ink-muted">{point.label}</span>
@@ -487,8 +490,8 @@ export default function HomeScreen() {
             </div>
 
             <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
-              <span>Promedio de energía: {weeklySummary.avgEnergy || 0}/5</span>
-              <span>Estrés medio: {weeklySummary.avgStress || 0}/5</span>
+              <span>{t("avgEnergy")}: {weeklySummary.avgEnergy || 0}/5</span>
+              <span>{t("avgStress")}: {weeklySummary.avgStress || 0}/5</span>
             </div>
           </section>
 
@@ -496,7 +499,7 @@ export default function HomeScreen() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-ink">
                 <CalendarHeart className="h-5 w-5 text-primary-deep" aria-hidden />
-                <h2 className="font-serif text-xl">Resumen del mes</h2>
+                <h2 className="font-serif text-xl">{t("monthSummary")}</h2>
               </div>
               <span className="rounded-full bg-surface px-2 py-1 text-xs font-medium text-ink">
                 {monthlySummary.completionRate}%
@@ -506,7 +509,7 @@ export default function HomeScreen() {
             <div className="mt-4 space-y-3">
               <div>
                 <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wide text-ink-muted">
-                  <span>Registro del mes</span>
+                  <span>{t("monthLog")}</span>
                   <span>{monthlySummary.completed}/{monthlySummary.totalDays}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-surface">
@@ -516,15 +519,15 @@ export default function HomeScreen() {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">Mañana mejor</p>
-                  <p className="mt-2 font-medium text-ink">{monthlySummary.bestMood}</p>
+                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("bestMood")}</p>
+                  <p className="mt-2 font-medium text-ink">{monthlySummary.bestMood === t("noData") ? t("noData") : translatedMood(monthlySummary.bestMood, locale, t)}</p>
                 </div>
                 <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">Energía</p>
+                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("energy")}</p>
                   <p className="mt-2 font-medium text-ink">{monthlySummary.avgEnergy || 0}/5</p>
                 </div>
                 <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">Estrés</p>
+                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("stress")}</p>
                   <p className="mt-2 font-medium text-ink">{monthlySummary.avgStress || 0}/5</p>
                 </div>
               </div>
@@ -532,7 +535,7 @@ export default function HomeScreen() {
           </section>
 
           <section className="rounded-3xl bg-primary-soft p-5">
-            <h2 className="font-serif text-xl text-ink">Meta semanal</h2>
+            <h2 className="font-serif text-xl text-ink">{t("monthGoal")}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {goalCards.map((goal) => (
                 <span
@@ -548,12 +551,12 @@ export default function HomeScreen() {
               ))}
             </div>
             <p className="mt-3 text-sm text-ink-muted">
-              {goalCards[0]?.detail ?? "Tus hábitos van mejorando poco a poco."}
+              {goalCards[0]?.detail ?? t("habitsImprove")}
             </p>
           </section>
 
           <section className="rounded-3xl bg-surface-muted p-5">
-            <h2 className="font-serif text-xl text-ink">Recordatorios</h2>
+            <h2 className="font-serif text-xl text-ink">{t("reminders")}</h2>
             <div className="mt-3 space-y-2">
               {notifications.map((item) => (
                 <div
@@ -577,26 +580,26 @@ export default function HomeScreen() {
         <section className="rounded-3xl border border-sage-300 bg-primary-soft p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm uppercase tracking-widest text-primary-deep">Bienvenida</p>
-              <h2 className="mt-1 font-serif text-2xl text-ink">Bloom te acompaña</h2>
+              <p className="text-sm uppercase tracking-widest text-primary-deep">{t("welcome")}</p>
+              <h2 className="mt-1 font-serif text-2xl text-ink">{t("bloomSupports")}</h2>
             </div>
             <button
               type="button"
               onClick={() => setShowOnboarding(false)}
               className="rounded-full bg-surface px-3 py-1 text-xs text-ink-muted"
             >
-              Entendido
+              {t("understood")}
             </button>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-            Registra tu ánimo, cuida tu energía, practica un movimiento suave y mira cómo tu planta va creciendo contigo.
+            {t("onboarding")}
           </p>
         </section>
       )}
 
       <button
         type="button"
-        aria-label="Ayuda urgente (SOS)"
+        aria-label={t("urgentHelp")}
         onClick={() => setSosOpen(true)}
         className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-bloom text-surface shadow-lg"
       >

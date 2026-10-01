@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { SWRegister } from "@/components/SWRegister";
+import { I18nProvider, LanguageSwitcher } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,10 +22,13 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="bg-surface text-ink antialiased">
-        <SWRegister />
-        <div className="mx-auto min-h-dvh w-full max-w-[430px] px-5 pb-10">
-          {children}
-        </div>
+        <I18nProvider>
+          <SWRegister />
+          <div className="mx-auto min-h-dvh w-full max-w-[430px] px-5 pb-10">
+            <LanguageSwitcher />
+            {children}
+          </div>
+        </I18nProvider>
       </body>
     </html>
   );

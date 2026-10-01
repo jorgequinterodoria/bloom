@@ -1,18 +1,13 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import { LocalizedMessage } from "@/lib/i18n";
 import { WorkoutPlayer } from "@/components/workout/WorkoutPlayer";
-
-export const metadata: Metadata = {
-  title: "Movimiento suave",
-  description: "Un flujo corto y tranquilo para tu ánimo de hoy.",
-};
 
 export default function MovePage() {
   return (
     <Suspense
       fallback={
         <main className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-ink-subtle">Preparando tu movimiento…</p>
+          <LocalizedMessage messageKey="movementReady" className="text-ink-subtle" />
         </main>
       }
     >

@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { todayKey } from "@/lib/utils";
+import { translatedMood, useI18n } from "@/lib/i18n";
+import { localizeExercise } from "@/lib/exercise-i18n";
 import { nextIndex, timeLeftAfterTick } from "./flow";
 
 interface Exercise {
@@ -17,6 +19,7 @@ interface Exercise {
 }
 
 export function WorkoutPlayer() {
+  const { locale, t } = useI18n();
   const searchParams = useSearchParams();
   const mood = searchParams.get("mood");
 
@@ -77,17 +80,17 @@ export function WorkoutPlayer() {
       body: JSON.stringify({ day: todayKey() }),
     })
       .then((res) => {
-        if (!res.ok) throw new Error("No se pudo guardar el avance");
+        if (!res.ok) throw new Error(t("saveProgressError"));
       })
       .catch(() => setSaveFailed(true));
-  }, [finished]);
+  }, [finished, t]);
 
   if (error || !mood || exercises?.length === 0) {
     return (
       <main className="space-y-6 py-16 text-center">
-        <p className="text-ink-muted">No encontramos tu flujo de hoy.</p>
+        <p className="text-ink-muted">{t("flowMissing")}</p>
         <Link href="/" className="inline-block min-h-12 rounded-2xl bg-primary px-6 py-3 text-surface">
-          Volver al inicio
+          {t("backHome")}
         </Link>
       </main>
     );
@@ -96,53 +99,54 @@ export function WorkoutPlayer() {
   if (!exercises) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-ink-subtle">Preparando tu movimiento…</p>
+        <p className="text-ink-subtle">{t("movementReady")}</p>
       </main>
     );
   }
 
   const moodSummary: Record<string, string> = {
-    Estresada: "Hoy tu objetivo es soltar tensión con calma y sin empujones.",
-    Ansiosa: "Hoy prioriza una respiración lenta y un ritmo suave.",
-    Energética: "Tu energía está buena; usa ese impulso con movimientos controlados.",
-    "Sin motivación": "Empieza con lo mínimo y deja que la rutina te dé impulso.",
+    Estresada: t("moodStressedSummary"),
+    Ansiosa: t("moodAnxiousSummary"),
+    Energética: t("moodEnergeticSummary"),
+    "Sin motivación": t("moodUnmotivatedSummary"),
   };
 
   if (finished) {
     return (
       <main className="space-y-6 py-16 text-center">
-        <p role="status" className="font-serif text-3xl text-ink">Listo por hoy</p>
-        <p className="text-ink-muted">Tu planta te espera en casa.</p>
+        <p role="status" className="font-serif text-3xl text-ink">{t("doneToday")}</p>
+        <p className="text-ink-muted">{t("plantWaiting")}</p>
         {saveFailed && (
           <p role="status" className="text-sm text-ink-muted">
-            No pudimos guardar tu avance.
+            {t("saveProgressError")}
           </p>
         )}
         <Link href="/" className="inline-block min-h-12 rounded-2xl bg-primary px-6 py-3 text-surface">
-          Volver al inicio
+          {t("backHome")}
         </Link>
       </main>
     );
   }
 
   const current = exercises[index];
+  const localizedExercise = localizeExercise(current.name, current.instructions, locale);
 
   return (
     <main className="flex min-h-[80vh] flex-col items-center justify-between py-10 text-center">
       <p className="text-sm uppercase tracking-widest text-ink-subtle">
-        {mood}
+        {translatedMood(mood, locale, t)}
       </p>
 
       <div className="w-full max-w-md rounded-3xl bg-primary-soft p-4 text-left">
-        <p className="text-xs uppercase tracking-[0.18em] text-primary-deep">Tu sesión</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-primary-deep">{t("session")}</p>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          {moodSummary[mood] ?? "Hoy le das un pequeño paso con atención y sin exigirte mucho."}
+          {moodSummary[mood] ?? t("genericMoodSummary")}
         </p>
       </div>
 
       <div className="flex flex-col items-center gap-6">
         <p className="sr-only">
-          Respira siguiendo el círculo: inhala lentamente y exhala despacio.
+          {t("breathingGuide")}
         </p>
         <div className="relative flex h-64 w-64 items-center justify-center">
           <motion.div
@@ -166,7 +170,7 @@ export function WorkoutPlayer() {
             }
           />
           <h1 className="relative z-10 max-w-[10rem] font-serif text-2xl leading-snug text-ink">
-            {current.name}
+            {localizedExercise.name}
           </h1>
         </div>
 
@@ -174,7 +178,7 @@ export function WorkoutPlayer() {
           <p className="text-sm text-ink">{timeLeft} s</p>
           <div
             role="progressbar"
-            aria-label="Progreso del ejercicio"
+            aria-label={t("progressExercise")}
             aria-valuemin={0}
             aria-valuemax={current.durationSeconds}
             aria-valuenow={current.durationSeconds - timeLeft}
@@ -190,22 +194,22 @@ export function WorkoutPlayer() {
         </div>
 
         <p aria-live="polite" className="text-sm text-ink-muted">
-          Ejercicio {index + 1} de {exercises.length}
+          {t("exerciseNumber", { current: index + 1, total: exercises.length })}
         </p>
 
         {current.illustration && (
           <Image
             unoptimized
             src={current.illustration}
-            alt={current.name}
+            alt={localizedExercise.name}
             width={320}
             height={160}
             className="h-40 w-auto"
           />
         )}
-        {current.instructions && (
+        {localizedExercise.instruction && (
           <p className="mx-auto max-w-sm text-sm leading-relaxed text-ink-muted">
-            {current.instructions}
+            {localizedExercise.instruction}
           </p>
         )}
       </div>
@@ -217,7 +221,7 @@ export function WorkoutPlayer() {
           className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-raised px-6 font-medium text-ink"
         >
           {paused ? <Play className="h-5 w-5" aria-hidden /> : <Pause className="h-5 w-5" aria-hidden />}
-          {paused ? "Reanudar" : "Pausar"}
+          {paused ? t("resume") : t("pause")}
         </button>
         <button
           type="button"
@@ -229,7 +233,7 @@ export function WorkoutPlayer() {
           className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-6 font-medium text-surface"
         >
           <SkipForward className="h-5 w-5" aria-hidden />
-          Siguiente movimiento
+          {t("nextMove")}
         </button>
       </div>
     </main>

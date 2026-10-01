@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginForm() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,14 +24,14 @@ export default function LoginForm() {
       if (res?.error) {
         setError(
           res.error === "CredentialsSignin"
-            ? "Correo o contraseña incorrectos."
-            : "Error del servidor. Intenta de nuevo.",
+            ? t("invalidCredentials")
+            : t("serverError"),
         );
         return;
       }
       window.location.href = "/";
     } catch {
-      setError("No se pudo iniciar sesión. Revisa tu conexión.");
+      setError(t("loginError"));
     } finally {
       setLoading(false);
     }
@@ -38,7 +40,7 @@ export default function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <label className="block space-y-2">
-        <span className="text-sm text-ink-muted">Correo</span>
+        <span className="text-sm text-ink-muted">{t("email")}</span>
         <input
           type="email"
           required
@@ -48,7 +50,7 @@ export default function LoginForm() {
         />
       </label>
       <label className="block space-y-2">
-        <span className="text-sm text-ink-muted">Contraseña</span>
+        <span className="text-sm text-ink-muted">{t("password")}</span>
         <input
           type="password"
           required
@@ -63,7 +65,7 @@ export default function LoginForm() {
         disabled={loading}
         className="min-h-12 w-full rounded-2xl bg-primary px-6 font-medium text-surface disabled:opacity-60"
       >
-        {loading ? "Entrando…" : "Entrar"}
+        {loading ? t("loggingIn") : t("login")}
       </button>
     </form>
   );
