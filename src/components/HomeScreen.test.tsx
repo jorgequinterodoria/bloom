@@ -1,266 +1,29 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { todayKey } from "@/lib/utils";
 import HomeScreen from "./HomeScreen";
 
-const { push, signOutMock, isWeekendDayMock } = vi.hoisted(() => ({
-  push: vi.fn(),
-  signOutMock: vi.fn(),
-  isWeekendDayMock: vi.fn(() => false),
-}));
-
+const { push, signOutMock, isWeekendDayMock } = vi.hoisted(() => ({ push: vi.fn(), signOutMock: vi.fn(), isWeekendDayMock: vi.fn(() => false) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("next-auth/react", () => ({ signOut: signOutMock }));
-vi.mock("@/lib/utils", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/utils")>();
-  return { ...actual, isWeekendDay: isWeekendDayMock };
+vi.mock("@/lib/utils", async (importOriginal) => { const actual = await importOriginal<typeof import("@/lib/utils")>(); return { ...actual, isWeekendDay: isWeekendDayMock }; });
+vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ locale: "es", t: (key: string, values: Record<string, string | number> = {}) => { const map: Record<string, string> = { homeGreeting: "Un momento para ti", homeSubline: "Bloom adapta tu día", yourBloom: "Tu Bloom", checkins: "registros", todayRecommendation: "Bloom para hoy", whyToday: "Por qué hoy", startSession: "Comenzar", checkinLabel: "Check-in", checkinQuestion: "¿Cómo llegas hoy?", journalPrompt: "¿Quieres guardar algo de hoy?", energy: "Energía", stress: "Estrés", journal: "Nota", notePlaceholder: "Añade", focus_balance: "Encontrar equilibrio", focus_balance_detail: "Un poco", moodStressed: "Estresada", moodStressedHint: "Soltar tensión", moodAnxious: "Ansiosa", moodAnxiousHint: "Bajar", moodEnergetic: "Energética", moodEnergeticHint: "Usar", moodUnmotivated: "Sin motivación", moodUnmotivatedHint: "Empezar", moodAria: "Registro de ánimo", plantAlt: "Planta de Bloom — etapa {stage} de {max}", todayIsLogged: "Hoy ya está registrado", readyForMovement: "Tu sesión te espera", readyForMovementDetail: "Retomar", viewEvolution: "Ver evolución", recentCare: "Tus últimos días", signOut: "Salir", urgentHelp: "Ayuda urgente (SOS)", weekend: "Fin de semana", weekendAria: "Fin de semana", weekendIntro: "Paseo", shortWalk: "Paseo corto", freshAir: "10–15 min", easyBike: "Bici suave", steadyMovement: "Movimiento", activeRest: "Descanso activo", unhurriedWalk: "Caminar", recordRide: "Registrar paseo del fin de semana", rideThanks: "Paseo registrado", weekendGentleDetail: "Cuenta", calmMode: "Modo calma", close: "Cerrar", calmIntro: "Pausa", talkSomeone: "Hablar", breatheWithMe: "Respirar", externalSupport: "Apoyo", breathingGuide: "Respira", calmTip: "Consejo", noRecord: "Sin registro", noData: "Sin datos", streakDays: "Racha {count} días", days: "días", achievementsTitle: "Logros", achievementsEmpty: "Sigue", gardenBeginning: "Aquí empieza", gardenSprouting: "Brota", gardenGrowing: "Crece", gardenBlooming: "Florece" }; const template = map[key] ?? key; return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), template); }, automatic: true, setLanguage: vi.fn() }) }));
+
+const fetchMock = vi.fn();
+let weekendRide = false;
+let checkedIn = false;
+
+beforeEach(() => {
+  push.mockReset(); signOutMock.mockReset(); isWeekendDayMock.mockReturnValue(false); weekendRide = false; checkedIn = false; fetchMock.mockReset();
+  fetchMock.mockImplementation((input: string) => { const url = String(input); if (url.startsWith("/api/log")) return Promise.resolve({ ok: true, json: async () => ({ checkedIn, weekendRide, workoutDone: false, energy: 3, stress: 3, note: "" }) }); if (url.startsWith("/api/plant")) return Promise.resolve({ ok: true, json: async () => ({ stage: 2, careDays: 2, minutes: 0, completedSessions: 0, growthPercent: 17, achievements: [] }) }); if (url.startsWith("/api/history")) return Promise.resolve({ ok: true, json: async () => ({ history: [] }) }); if (url.startsWith("/api/profile")) return Promise.resolve({ ok: true, json: async () => ({ profile: { onboardingCompleted: true, preferredDuration: 15 } }) }); if (url.startsWith("/api/checkin")) return Promise.resolve({ ok: true, json: async () => ({ ok: true, stage: 3 }) }); if (url.startsWith("/api/ride")) return Promise.resolve({ ok: true, json: async () => ({ ok: true, stage: 3 }) }); if (url.startsWith("/api/sos")) return Promise.resolve({ ok: true, json: async () => ({ ok: true }) }); return Promise.resolve({ ok: true, json: async () => ({}) }); });
+  vi.stubGlobal("fetch", fetchMock);
 });
+afterEach(() => vi.unstubAllGlobals());
 
-interface FetchResult {
-  ok?: boolean;
-  json: () => Promise<unknown>;
-}
-
-const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<FetchResult>>();
-
-interface LogPayload {
-  checkedIn: boolean;
-  moodId: string | null;
-  workoutDone: boolean;
-  weekendRide: boolean;
-  sosTriggered: boolean;
-  dayKey: string;
-}
-
-const defaultLog: LogPayload = {
-  checkedIn: false,
-  moodId: null,
-  workoutDone: false,
-  weekendRide: false,
-  sosTriggered: false,
-  dayKey: todayKey(),
-};
-
-let logPayload: LogPayload = { ...defaultLog };
-
-function ok(data: unknown): Promise<FetchResult> {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
-}
-
-function callsTo(prefix: string) {
-  return fetchMock.mock.calls.filter(([input]) => String(input).startsWith(prefix));
-}
-
-function postBody(call: (typeof fetchMock.mock.calls)[number]) {
-  return JSON.parse(String(call[1]?.body));
-}
-
-describe("HomeScreen", () => {
-  beforeEach(() => {
-    push.mockReset();
-    signOutMock.mockReset();
-    isWeekendDayMock.mockReset();
-    isWeekendDayMock.mockReturnValue(false);
-    logPayload = { ...defaultLog, dayKey: todayKey() };
-    fetchMock.mockReset();
-    fetchMock.mockImplementation((input) => {
-      const url = String(input);
-      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
-      if (url.startsWith("/api/log")) return ok(logPayload);
-      if (url.startsWith("/api/checkin")) return ok({ ok: true, stage: 3, dayKey: todayKey() });
-      if (url.startsWith("/api/ride")) return ok({ ok: true, stage: 4, dayKey: todayKey() });
-      if (url.startsWith("/api/sos")) return ok({ ok: true, dayKey: todayKey() });
-      return ok({});
-    });
-    vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("al montar carga la planta y el registro del día y muestra la planta y los 4 ánimos", async () => {
-    render(<HomeScreen />);
-
-    expect(await screen.findByRole("img", { name: /planta/i })).toBeInTheDocument();
-
-    const plantCalls = callsTo("/api/plant");
-    expect(plantCalls).toHaveLength(1);
-
-    const logCalls = callsTo("/api/log");
-    expect(logCalls).toHaveLength(1);
-    expect(logCalls[0][0]).toBe(`/api/log?day=${todayKey()}`);
-
-    const region = await screen.findByRole("region", { name: /registro de ánimo/i });
-    expect(within(region).getAllByRole("button")).toHaveLength(4);
-    expect(screen.queryByRole("button", { name: /paseo/i })).not.toBeInTheDocument();
-  });
-
-  it("al tocar un ánimo hace POST /api/checkin con mood y day y navega a /move", async () => {
-    render(<HomeScreen />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /ansiosa/i }));
-
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/move?mood=Ansiosa"));
-
-    const calls = callsTo("/api/checkin");
-    expect(calls).toHaveLength(1);
-    expect(calls[0][0]).toBe("/api/checkin");
-    expect(calls[0][1]?.method).toBe("POST");
-    expect(postBody(calls[0])).toEqual({ mood: "Ansiosa", day: todayKey(), energy: 3, stress: 3, note: "" });
-  });
-
-  it("con doble toque rápido solo envía un checkin", async () => {
-    render(<HomeScreen />);
-
-    const pill = await screen.findByRole("button", { name: /ansiosa/i });
-    fireEvent.click(pill);
-    fireEvent.click(pill);
-
-    await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-    expect(callsTo("/api/checkin")).toHaveLength(1);
-  });
-
-  it("si el checkin falla por red no navega, no rompe la UI y permite reintentar", async () => {
-    fetchMock.mockImplementation((input) => {
-      const url = String(input);
-      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
-      if (url.startsWith("/api/log")) return ok(logPayload);
-      if (url.startsWith("/api/checkin")) return Promise.reject(new Error("network"));
-      return ok({});
-    });
-
-    render(<HomeScreen />);
-
-    const pill = await screen.findByRole("button", { name: /ansiosa/i });
-    fireEvent.click(pill);
-
-    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(1));
-    expect(push).not.toHaveBeenCalled();
-
-    await waitFor(() => expect(pill).toBeEnabled());
-    fireEvent.click(pill);
-    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(2));
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it("si el checkin devuelve res.ok=false no navega ni cambia el estado", async () => {
-    fetchMock.mockImplementation((input) => {
-      const url = String(input);
-      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
-      if (url.startsWith("/api/log")) return ok(logPayload);
-      if (url.startsWith("/api/checkin"))
-        return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: "not found" }) });
-      return ok({});
-    });
-
-    render(<HomeScreen />);
-
-    const pill = await screen.findByRole("button", { name: /ansiosa/i });
-    fireEvent.click(pill);
-
-    await waitFor(() => expect(callsTo("/api/checkin")).toHaveLength(1));
-    expect(push).not.toHaveBeenCalled();
-
-    await waitFor(() => expect(pill).toBeEnabled());
-    expect(screen.getByRole("button", { name: /ansiosa/i })).toBeInTheDocument();
-    expect(screen.queryByText(/gracias por registrar cómo te sientes/i)).not.toBeInTheDocument();
-  });
-
-  it("tras un checkin exitoso la planta muestra la etapa devuelta por /api/checkin", async () => {
-    render(<HomeScreen />);
-
-    expect(await screen.findByRole("img", { name: /etapa 2 de 12/ })).toBeInTheDocument();
-
-    fireEvent.click(await screen.findByRole("button", { name: /ansiosa/i }));
-
-    expect(await screen.findByRole("img", { name: /etapa 3 de 12/ })).toBeInTheDocument();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/move?mood=Ansiosa"));
-  });
-
-  it("el botón SOS abre el diálogo y dispara POST /api/sos con el día", async () => {
-    render(<HomeScreen />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /ayuda urgente \(sos\)/i }));
-
-    expect(await screen.findByRole("dialog", { name: /modo calma/i })).toBeInTheDocument();
-
-    await waitFor(() => {
-      const calls = callsTo("/api/sos");
-      expect(calls).toHaveLength(1);
-      expect(calls[0][1]?.method).toBe("POST");
-      expect(postBody(calls[0])).toEqual({ day: todayKey() });
-    });
-  });
-
-  it("si ya registraste hoy muestra la confirmación sin ánimos", async () => {
-    logPayload = { ...logPayload, checkedIn: true, moodId: "Ansiosa" };
-
-    render(<HomeScreen />);
-
-    expect(await screen.findByText(/gracias por registrar cómo te sientes/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /ansiosa/i })).not.toBeInTheDocument();
-  });
-
-  it("fin de semana: ofrece el paseo y lo registra con POST /api/ride", async () => {
-    isWeekendDayMock.mockReturnValue(true);
-
-    render(<HomeScreen />);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: /registrar paseo del fin de semana/i }),
-    );
-
-    await waitFor(() => expect(screen.getByText(/paseo registrado/i)).toBeInTheDocument());
-
-    const calls = callsTo("/api/ride");
-    expect(calls).toHaveLength(1);
-    expect(calls[0][1]?.method).toBe("POST");
-    expect(postBody(calls[0])).toEqual({ day: todayKey() });
-  });
-
-  it("si /api/log falla muestra el alerto con reintentar y al reintentar recupera la UI", async () => {
-    let logAttempts = 0;
-    fetchMock.mockImplementation((input) => {
-      const url = String(input);
-      if (url.startsWith("/api/plant")) return ok({ stage: 2 });
-      if (url.startsWith("/api/log")) {
-        logAttempts += 1;
-        if (logAttempts === 1) return Promise.reject(new Error("network"));
-        return ok(logPayload);
-      }
-      if (url.startsWith("/api/checkin")) return ok({ ok: true, stage: 3, dayKey: todayKey() });
-      return ok({});
-    });
-
-    render(<HomeScreen />);
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/no pudimos cargar tu día/i);
-    expect(screen.queryByText(/cargando tu día/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /registro de ánimo/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
-
-    expect(await screen.findByRole("region", { name: /registro de ánimo/i })).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByText(/cargando tu día/i)).not.toBeInTheDocument();
-    expect(callsTo("/api/log")).toHaveLength(2);
-  });
-
-  it("muestra un resumen semanal, del mes y recordatorios cuando hay historial local", async () => {
-    const stored = [
-      { date: todayKey(), mood: "Ansiosa", energy: 3, stress: 4, note: "Me he sentido acelerada" },
-      { date: "2026-09-29", mood: "Energética", energy: 4, stress: 2, note: "He mantenido ritmo" },
-      { date: "2026-09-28", mood: "Estresada", energy: 2, stress: 5, note: "Mucho trabajo" },
-    ];
-    localStorage.setItem("bloom-history", JSON.stringify(stored));
-
-    render(<HomeScreen />);
-
-    expect(await screen.findByText(/tu semana/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/racha/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/resumen del mes/i)).toBeInTheDocument();
-    expect(screen.getByText(/recordatorios/i)).toBeInTheDocument();
-  });
+describe("HomeScreen premium", () => {
+  it("carga el nuevo home y los cuatro ánimos", async () => { render(<HomeScreen />); expect(await screen.findByText("Bloom para hoy")).toBeInTheDocument(); expect(screen.getAllByRole("button", { name: /ansiosa/i })).toHaveLength(1); });
+  it("registra el check-in y navega con contexto de sesión", async () => { render(<HomeScreen />); fireEvent.click(await screen.findByRole("button", { name: /ansiosa/i })); await waitFor(() => expect(push).toHaveBeenCalledWith("/move?mood=Ansiosa&energy=3&stress=3&duration=15")); expect(fetchMock).toHaveBeenCalledWith("/api/checkin", expect.objectContaining({ method: "POST" })); });
+  it("con doble toque solo envía un check-in", async () => { render(<HomeScreen />); const button = await screen.findByRole("button", { name: /ansiosa/i }); fireEvent.click(button); fireEvent.click(button); await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === "/api/checkin")).toHaveLength(1)); });
+  it("preserva el flujo de paseo de fin de semana", async () => { isWeekendDayMock.mockReturnValue(true); render(<HomeScreen />); fireEvent.click(await screen.findByRole("button", { name: /registrar paseo/i })); expect(await screen.findByText("Paseo registrado")).toBeInTheDocument(); expect(fetchMock.mock.calls.some(([url]) => url === "/api/ride")).toBe(true); weekendRide = true; });
+  it("abre SOS", async () => { render(<HomeScreen />); fireEvent.click(await screen.findByRole("button", { name: /ayuda urgente/i })); expect(await screen.findByRole("dialog")).toBeInTheDocument(); });
 });

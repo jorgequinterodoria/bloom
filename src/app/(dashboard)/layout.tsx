@@ -1,16 +1,10 @@
 import { redirect } from "next/navigation";
+import { AppNav } from "@/components/navigation/AppNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { auth } from "@/lib/auth";
 
-// INVARIANTE: el redirect de un layout NO impide que el body del hijo se
-// renderice en la respuesta 307. Nunca renderizar datos de usuario en el
-// servidor bajo (dashboard) sin su propio `auth()`; todo dato viene de /api/*
-// (que exigen requireUserId).
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  return <>{children}</>;
+  return <><ThemeToggle /><div className="pb-20">{children}</div><AppNav /></>;
 }

@@ -1,611 +1,231 @@
 "use client";
 
-import { Bell, CalendarHeart, Heart, Sparkles, SunMedium, TrendingUp } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowRight, Bell, Heart, Leaf, LogOut, ShieldCheck, Sparkles } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckinCard } from "@/components/dashboard/CheckinCard";
 import { MoodButtons } from "@/components/mood/MoodButtons";
+import { RecommendationCard } from "@/components/dashboard/RecommendationCard";
+import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import { PlantGrowth } from "@/components/plant/PlantGrowth";
 import { SOSModal } from "@/components/sos/SOSModal";
-import { translatedMood, useI18n } from "@/lib/i18n";
+import { buildRecommendation } from "@/lib/recommendations";
+import { useI18n } from "@/lib/i18n";
 import { isWeekendDay, todayKey } from "@/lib/utils";
+import { enqueueMutation } from "@/lib/offline";
+import type { MoodName } from "@/lib/constants";
 
-interface DayLog {
-  checkedIn: boolean;
-  workoutDone: boolean;
-  weekendRide: boolean;
-}
-
-interface HistoryEntry {
-  date: string;
-  mood: string;
-  energy: number;
-  stress: number;
-  note: string;
-}
-
-const HISTORY_KEY = "bloom-history";
-const ONBOARDING_KEY = "bloom-onboarded";
-
-function readHistory(): HistoryEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeHistory(entries: HistoryEntry[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
-}
-
-function getStreak(entries: HistoryEntry[]) {
-  if (!entries.length) return 0;
-  const unique = new Set(entries.map((entry) => entry.date));
-  const cursor = new Date();
-  let streak = 0;
-
-  while (true) {
-    const key = todayKey(cursor);
-    if (!unique.has(key)) break;
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streak;
-}
-
-function buildWeeklySummary(entries: HistoryEntry[], locale: string, noRecord: string) {
-  const dateLocale = { es: "es-ES", fr: "fr-FR", pt: "pt-BR", en: "en-US", it: "it-IT" }[locale] ?? "es-ES";
-  const points = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-    const key = todayKey(date);
-    const match = entries.find((entry) => entry.date === key);
-    return {
-      label: new Intl.DateTimeFormat(dateLocale, { weekday: "short" }).format(date),
-      key,
-      mood: match?.mood ?? noRecord,
-      energy: match?.energy ?? 0,
-      stress: match?.stress ?? 0,
-    };
-  });
-
-  const energyValues = points.map((point) => point.energy).filter((value) => value > 0);
-  const stressValues = points.map((point) => point.stress).filter((value) => value > 0);
-
-  return {
-    points,
-    streak: getStreak(entries),
-    avgEnergy: energyValues.length ? Math.round((energyValues.reduce((a, b) => a + b, 0) / energyValues.length) * 10) / 10 : 0,
-    avgStress: stressValues.length ? Math.round((stressValues.reduce((a, b) => a + b, 0) / stressValues.length) * 10) / 10 : 0,
-    bestDay: points.filter((point) => point.mood !== noRecord).slice(-1)[0]?.mood ?? noRecord,
-  };
-}
-
-function buildMonthlySummary(entries: HistoryEntry[], noData: string) {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const totalDays = monthEnd.getDate();
-  const monthEntries = entries.filter((entry) => {
-    const value = new Date(`${entry.date}T00:00:00`);
-    return value >= monthStart && value <= monthEnd;
-  });
-
-  const energyValues = monthEntries.map((entry) => entry.energy).filter((value) => value > 0);
-  const stressValues = monthEntries.map((entry) => entry.stress).filter((value) => value > 0);
-  const moodCounts = new Map<string, number>();
-
-  monthEntries.forEach((entry) => {
-    if (entry.mood === "Sin registro") return;
-    moodCounts.set(entry.mood, (moodCounts.get(entry.mood) ?? 0) + 1);
-  });
-
-  const bestMood = Array.from(moodCounts.entries()).sort((a, b) => b[1] - a[1])[0];
-  const completionRate = totalDays ? Math.min(100, Math.round((monthEntries.length / totalDays) * 100)) : 0;
-
-  return {
-    totalDays,
-    completed: monthEntries.length,
-    completionRate,
-    avgEnergy: energyValues.length ? Math.round((energyValues.reduce((a, b) => a + b, 0) / energyValues.length) * 10) / 10 : 0,
-    avgStress: stressValues.length ? Math.round((stressValues.reduce((a, b) => a + b, 0) / stressValues.length) * 10) / 10 : 0,
-    bestMood: bestMood ? bestMood[0] : noData,
-  };
-}
+interface DayLog { checkedIn: boolean; workoutDone: boolean; weekendRide: boolean; moodId?: string | null; }
+interface HistoryEntry { date: string; mood: string; energy: number; stress: number; note: string; }
 
 export default function HomeScreen() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
-  const [weekend, setWeekend] = useState(false);
-  const [stage, setStage] = useState(0);
   const [log, setLog] = useState<DayLog | null>(null);
-  const [logError, setLogError] = useState(false);
-  const [sosOpen, setSosOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [stage, setStage] = useState(0);
   const [energy, setEnergy] = useState(3);
   const [stress, setStress] = useState(3);
   const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sosOpen, setSosOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [preferredDuration, setPreferredDuration] = useState(15);
+  const [offlinePending, setOfflinePending] = useState(false);
+  const [recommendation, setRecommendation] = useState(buildRecommendation({ energy: 3, stress: 3 }));
 
-  const loadLog = useCallback(() => {
-    setLogError(false);
-    fetch(`/api/log?day=${todayKey()}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("log fetch failed");
-        return r.json();
-      })
-      .then((d) => {
-        setLog(d);
-        if (typeof d?.energy === "number") setEnergy(d.energy);
-        if (typeof d?.stress === "number") setStress(d.stress);
-        if (typeof d?.note === "string") setNote(d.note);
-      })
-      .catch(() => setLogError(true));
+  const load = useCallback(async () => {
+    const day = todayKey();
+    const [logResponse, historyResponse, plantResponse, profileResponse] = await Promise.all([
+      fetch(`/api/log?day=${day}`),
+      fetch("/api/history?days=30"),
+      fetch("/api/plant"),
+      fetch("/api/profile"),
+    ]);
+    if (logResponse.ok) {
+      const data = await logResponse.json();
+      setLog(data);
+      setEnergy(typeof data.energy === "number" ? data.energy : 3);
+      setStress(typeof data.stress === "number" ? data.stress : 3);
+      setNote(typeof data.note === "string" ? data.note : "");
+    }
+    if (historyResponse.ok) {
+      const data = await historyResponse.json();
+      if (Array.isArray(data.history)) setHistory(data.history);
+    }
+    if (plantResponse.ok) {
+      const data = await plantResponse.json();
+      setStage(typeof data.stage === "number" ? data.stage : 0);
+    }
+    if (profileResponse.ok) {
+      const data = await profileResponse.json();
+      setShowOnboarding(!Boolean(data.profile?.onboardingCompleted));
+      if (typeof data.profile?.preferredDuration === "number") setPreferredDuration(data.profile.preferredDuration);
+    }
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const response = await fetch("/api/history?days=7");
-      if (!response.ok) throw new Error("history fetch failed");
-      const data = await response.json();
-      if (Array.isArray(data?.history)) {
-        setHistory(data.history);
-        return;
-      }
-    } catch {
-      // fallback local para usuarios sin backend persistente aún
-    }
-
-    setHistory(readHistory());
-  }, []);
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    loadHistory();
-    if (typeof window !== "undefined" && !window.localStorage.getItem(ONBOARDING_KEY)) {
-      setShowOnboarding(true);
-      window.localStorage.setItem(ONBOARDING_KEY, "1");
-    }
-  }, [loadHistory]);
-
-  useEffect(() => {
-    setWeekend(isWeekendDay(new Date()));
-    fetch("/api/plant")
-      .then((r) => {
-        if (!r.ok) throw new Error("plant fetch failed");
-        return r.json();
-      })
-      .then((d) => typeof d.stage === "number" && setStage(d.stage))
-      .catch(() => { });
-    loadLog();
-  }, [loadLog]);
-
-  useEffect(() => {
-    if (!sosOpen) return;
-    fetch("/api/sos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ day: todayKey() }),
-    }).catch(() => { });
-  }, [sosOpen]);
-
-  const persistTodayEntry = useCallback((mood: string) => {
-    const nextEntry: HistoryEntry = {
-      date: todayKey(),
-      mood,
+    setRecommendation(buildRecommendation({
       energy,
       stress,
-      note,
-    };
+      preferredDuration,
+      recentStress: history.slice(0, 7).map((entry) => entry.stress),
+      recentEnergy: history.slice(0, 7).map((entry) => entry.energy),
+    }));
+  }, [energy, stress, history, preferredDuration]);
 
-    setHistory((previous) => {
-      const filtered = previous.filter((entry) => entry.date !== nextEntry.date);
-      const next = [...filtered, nextEntry].sort((a, b) => a.date.localeCompare(b.date));
-      writeHistory(next);
-      return next;
-    });
-  }, [energy, note, stress]);
+  const streak = useMemo(() => {
+    const dates = new Set(history.map((entry) => entry.date));
+    let count = 0;
+    const cursor = new Date();
+    while (dates.has(todayKey(cursor))) { count += 1; cursor.setDate(cursor.getDate() - 1); }
+    return count;
+  }, [history]);
 
-  const weeklySummary = useMemo(() => buildWeeklySummary(history, locale, t("noRecord")), [history, locale, t]);
-  const monthlySummary = useMemo(() => buildMonthlySummary(history, t("noData")), [history, t]);
+  const monthCheckins = useMemo(() => history.length, [history]);
+  const weekend = isWeekendDay(new Date());
 
-  const reminderText = useMemo(() => {
-    if (weeklySummary.streak >= 3) return t("reminderStreak");
-    if (weeklySummary.avgStress >= 4) return t("reminderStress");
-    return t("reminderPause");
-  }, [t, weeklySummary.avgStress, weeklySummary.streak]);
-
-  const notifications = useMemo(() => {
-    const items: { title: string; body: string; tone: "good" | "warn" }[] = [];
-
-    if (weeklySummary.streak >= 3) {
-      items.push({ title: t("consistency"), body: t("streakMessage"), tone: "good" });
-    }
-
-    if (monthlySummary.completionRate >= 60) {
-      items.push({ title: t("monthlyGoal"), body: t("monthComplete", { rate: monthlySummary.completionRate }), tone: "good" });
-    } else {
-      items.push({ title: t("usefulHint"), body: t("gentleMovement"), tone: "warn" });
-    }
-
-    if (weeklySummary.avgStress >= 4) {
-      items.push({ title: t("highLoad"), body: t("highStressMessage"), tone: "warn" });
-    }
-
-    return items.slice(0, 3);
-  }, [monthlySummary.completionRate, t, weeklySummary.avgStress, weeklySummary.streak]);
-
-  const goalCards = useMemo(() => {
-    const cards: Array<{ label: string; ok: boolean; detail: string }> = [];
-
-    if (weeklySummary.streak >= 3) {
-      cards.push({ label: t("solidStreak"), ok: true, detail: t("severalDays") });
-    } else {
-      cards.push({ label: t("streak"), ok: false, detail: t("startStreak") });
-    }
-
-    if (weeklySummary.avgEnergy >= 3) {
-      cards.push({ label: t("stableEnergy"), ok: true, detail: t("energyGood") });
-    } else {
-      cards.push({ label: t("recharge"), ok: false, detail: t("energyRest") });
-    }
-
-    if (weeklySummary.avgStress <= 3) {
-      cards.push({ label: t("controlledLoad"), ok: true, detail: t("stressReduced") });
-    } else {
-      cards.push({ label: t("breathe"), ok: false, detail: t("stressRelease") });
-    }
-
-    return cards.slice(0, 3);
-  }, [t, weeklySummary.avgEnergy, weeklySummary.avgStress, weeklySummary.streak]);
-
-  const handleMood = useCallback(
-    async (mood: string) => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/checkin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mood, day: todayKey(), energy, stress, note }),
-        });
-        if (!res.ok) throw new Error("checkin failed");
-        const data = await res.json();
-        if (typeof data.stage === "number") setStage(data.stage);
-        persistTodayEntry(mood);
-        setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), checkedIn: true }));
-        router.push(`/move?mood=${encodeURIComponent(mood)}`);
-      } catch {
-        // fallo de red: nos quedamos en casa
-      } finally {
-        setBusy(false);
+  const handleMood = useCallback(async (mood: MoodName) => {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mood, day: todayKey(), energy, stress, note }),
+      });
+      if (!response.ok) throw new Error("checkin");
+      const data = await response.json();
+      if (typeof data.stage === "number") setStage(data.stage);
+      setLog((current) => ({ ...(current ?? { checkedIn: false, workoutDone: false, weekendRide: false }), checkedIn: true }));
+      router.push(`/move?mood=${encodeURIComponent(mood)}&energy=${energy}&stress=${stress}&duration=${recommendation.duration}`);
+    } catch {
+      if (!navigator.onLine) {
+        enqueueMutation("/api/checkin", { mood, day: todayKey(), energy, stress, note });
+        setOfflinePending(true);
+        setLog((current) => ({ ...(current ?? { checkedIn: false, workoutDone: false, weekendRide: false }), checkedIn: true }));
       }
-    },
-    [energy, note, persistTodayEntry, router, stress],
-  );
+    } finally {
+      setBusy(false);
+    }
+  }, [energy, note, recommendation.duration, router, stress]);
+
 
   const handleRide = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/ride", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day: todayKey() }),
-      });
-      if (!res.ok) throw new Error("ride failed");
-      const data = await res.json();
+      const response = await fetch("/api/ride", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ day: todayKey() }) });
+      if (!response.ok) throw new Error("ride");
+      const data = await response.json();
       if (typeof data.stage === "number") setStage(data.stage);
-      setLog((prev) => ({ ...(prev ?? { checkedIn: false, workoutDone: false, weekendRide: false }), weekendRide: true }));
+      setLog((current) => ({ ...(current ?? { checkedIn: false, workoutDone: false, weekendRide: false }), weekendRide: true }));
     } catch {
-      // fallo de red: nos quedamos en casa
+      enqueueMutation("/api/ride", { day: todayKey() });
+      setOfflinePending(true);
+      setLog((current) => ({ ...(current ?? { checkedIn: false, workoutDone: false, weekendRide: false }), weekendRide: true }));
     } finally {
       setBusy(false);
     }
   }, []);
 
-  const alreadyCheckedIn = Boolean(log?.checkedIn);
-  const alreadyRode = Boolean(log?.weekendRide);
-  const showCheckinConfirm = alreadyCheckedIn && !weekend;
-  const showRideConfirm = weekend && alreadyRode;
-  const confirmRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    if (showCheckinConfirm || showRideConfirm) confirmRef.current?.focus();
-  }, [showCheckinConfirm, showRideConfirm]);
+  const startRecommended = () => {
+    if (!log?.checkedIn) {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    router.push(`/move?mood=${encodeURIComponent(recommendation.mood)}&energy=${energy}&stress=${stress}&duration=${recommendation.duration}`);
+  };
 
   return (
-    <main className="relative space-y-8 py-8 pb-24">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-sm uppercase tracking-widest text-ink-subtle">Bloom</p>
-          <h1 className="font-serif text-3xl leading-tight text-ink">{t("homeTitle")}</h1>
+    <main className="space-y-6 py-4 pb-28">
+      <header className="flex items-start justify-between gap-4 pt-1">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-deep">Bloom</p>
+          <h1 className="mt-1 font-serif text-[2.35rem] leading-[1.05] text-ink">{t("homeGreeting")}</h1>
+          <p className="mt-2 text-sm text-ink-muted">{t("homeSubline")}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          className="min-h-12 rounded-2xl px-4 text-sm text-ink-muted underline"
-        >
-          {t("signOut")}
+        <button type="button" aria-label={t("signOut")} onClick={() => signOut({ callbackUrl: "/login" })} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-muted text-ink-muted ring-1 ring-black/5">
+          <LogOut className="h-4 w-4" aria-hidden />
         </button>
       </header>
 
-      <div className="flex justify-center">
-        <PlantGrowth stage={stage} />
-      </div>
-
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-3xl bg-primary-soft p-4">
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <TrendingUp className="h-4 w-4 text-primary-deep" aria-hidden />
-            <span>{t("streak")}</span>
+      <section className="relative overflow-hidden rounded-[34px] bg-surface-muted p-5 ring-1 ring-black/5">
+        <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-primary-soft blur-3xl" />
+        <div className="relative flex items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary-deep"><Leaf className="h-4 w-4" aria-hidden />{t("yourBloom")}</div>
+            <p className="mt-2 font-serif text-2xl text-ink">{t(stage >= 10 ? "gardenBlooming" : stage >= 6 ? "gardenGrowing" : stage >= 3 ? "gardenSprouting" : "gardenBeginning")}</p>
+            <p className="mt-1 text-xs text-ink-muted">{streak} {t("days")} · {monthCheckins} {t("checkins")}</p>
           </div>
-          <p className="mt-2 text-2xl font-serif text-ink">{weeklySummary.streak} {t("days")}</p>
-        </div>
-        <div className="rounded-3xl bg-accent-soft p-4">
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <SunMedium className="h-4 w-4 text-bloom" aria-hidden />
-            <span>{t("energy")}</span>
-          </div>
-          <p className="mt-2 text-2xl font-serif text-ink">{weeklySummary.avgEnergy || 0}/5</p>
-        </div>
-        <div className="rounded-3xl bg-surface-muted p-4">
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <Bell className="h-4 w-4 text-ink-muted" aria-hidden />
-            <span>{t("reminder")}</span>
-          </div>
-          <p className="mt-2 text-sm font-medium text-ink">{reminderText}</p>
+          <div className="-mr-3 -mt-4 h-36 w-32"><PlantGrowth stage={stage} compact /></div>
         </div>
       </section>
 
-      {log === null ? (
-        logError ? (
-          <div className="space-y-4 text-center">
-            <p role="alert" className="text-sm text-ink">{t("loadDayError")}</p>
-            <button
-              type="button"
-              onClick={loadLog}
-              className="min-h-12 rounded-2xl bg-primary px-4 text-sm text-surface"
-            >
-              {t("retry")}
-            </button>
-          </div>
-        ) : (
-          <p role="status" className="text-center text-sm text-ink-muted">{t("loadingDay")}</p>
-        )
-      ) : (
-        <>
-          {showCheckinConfirm && (
-            <p
-              role="status"
-              aria-live="polite"
-              tabIndex={-1}
-              ref={confirmRef}
-              className="rounded-3xl bg-primary-soft p-5 text-center text-ink"
-            >
-              {t("checkinThanks")}
-            </p>
-          )}
+      <RecommendationCard recommendation={recommendation} onStart={startRecommended} />
 
-          {!weekend && !alreadyCheckedIn && (
-            <MoodButtons weekend={false} onSelect={handleMood} onRide={handleRide} disabled={busy} />
-          )}
+      {offlinePending && <div role="status" className="rounded-2xl bg-surface-muted px-4 py-3 text-xs text-ink-muted">{t("offlineQueued", { count: 1 })}</div>}
 
-          {weekend && !alreadyRode && (
-            <MoodButtons weekend onSelect={handleMood} onRide={handleRide} disabled={busy} />
-          )}
-
-          {showRideConfirm && (
-            <p
-              role="status"
-              aria-live="polite"
-              tabIndex={-1}
-              ref={confirmRef}
-              className="rounded-3xl bg-accent-soft p-5 text-center text-ink"
-            >
-              {t("rideThanks")}
-            </p>
-          )}
-        </>
+      {!weekend && !log?.checkedIn && (
+        <CheckinCard
+          energy={energy}
+          stress={stress}
+          note={note}
+          busy={busy}
+          onEnergy={setEnergy}
+          onStress={setStress}
+          onNote={setNote}
+          onMood={handleMood}
+        />
       )}
 
-      {!weekend && !alreadyCheckedIn && (
-        <section className="rounded-3xl bg-surface-muted p-5">
-          <div className="flex items-center gap-2 text-ink">
-            <CalendarHeart className="h-5 w-5 text-primary-deep" aria-hidden />
-            <h2 className="font-serif text-xl">{t("todayContext")}</h2>
+      {weekend && !log?.checkedIn && !log?.weekendRide && (
+        <MoodButtons weekend onSelect={handleMood} onRide={handleRide} disabled={busy} />
+      )}
+
+      {weekend && log?.weekendRide && !log?.checkedIn && (
+        <section className="rounded-[30px] bg-accent-soft p-5 text-center"><p className="font-serif text-2xl text-ink">{t("rideThanks")}</p><p className="mt-2 text-sm text-ink-muted">{t("weekendGentleDetail")}</p></section>
+      )}
+
+      {log?.checkedIn && (
+        <section className="rounded-[32px] border border-primary/20 bg-primary-soft p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-deep">{t("todayIsLogged")}</p>
+              <h2 className="mt-1 font-serif text-2xl text-ink">{t("readyForMovement")}</h2>
+              <p className="mt-2 text-sm text-ink-muted">{t("readyForMovementDetail")}</p>
+            </div>
+            <ShieldCheck className="h-6 w-6 shrink-0 text-primary-deep" aria-hidden />
           </div>
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm text-ink-muted">
-              {t("energy")}: <span className="font-medium text-ink">{energy}/5</span>
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={energy}
-                onChange={(event) => setEnergy(Number(event.target.value))}
-                className="mt-2 w-full"
-              />
-            </label>
-            <label className="block text-sm text-ink-muted">
-              {t("stress")}: <span className="font-medium text-ink">{stress}/5</span>
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={stress}
-                onChange={(event) => setStress(Number(event.target.value))}
-                className="mt-2 w-full"
-              />
-            </label>
-            <label className="block text-sm text-ink-muted">
-              {t("shortNote")}
-              <textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                rows={3}
-                placeholder={t("notePlaceholder")}
-                className="mt-2 w-full rounded-2xl border border-sage-300 bg-surface p-3 text-ink placeholder:text-ink-muted"
-              />
-            </label>
-          </div>
+          <button type="button" onClick={startRecommended} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-surface">
+            {t("startSession")}<ArrowRight className="h-4 w-4" aria-hidden />
+          </button>
+        </section>
+      )}
+
+      {weekend && !log?.checkedIn && (
+        <section className="rounded-[30px] bg-accent-soft p-5">
+          <div className="flex items-center gap-2"><Bell className="h-5 w-5 text-bloom" aria-hidden /><h2 className="font-serif text-2xl text-ink">{t("weekendGentle")}</h2></div>
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t("weekendGentleDetail")}</p>
         </section>
       )}
 
       {history.length > 0 && (
-        <>
-          <section className="rounded-3xl bg-surface-muted p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-ink">
-                <Sparkles className="h-5 w-5 text-bloom" aria-hidden />
-                <h2 className="font-serif text-xl">{t("week")}</h2>
-              </div>
-              <span className="rounded-full bg-primary-soft px-2 py-1 text-xs font-medium text-primary-deep">
-                {t("streakDays", { count: weeklySummary.streak })}
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-7 gap-2">
-              {weeklySummary.points.map((point) => {
-                const height = point.energy ? Math.max(18, point.energy * 20) : 10;
-                return (
-                  <div key={point.key} className="flex flex-col items-center gap-2">
-                    <div className="flex h-16 w-full items-end justify-center rounded-2xl bg-surface p-1">
-                      <div
-                        className={point.mood === t("noRecord") ? "w-full rounded-xl bg-surface-muted" : "w-full rounded-xl bg-primary"}
-                        style={{ height: `${height}px` }}
-                        title={point.mood === t("noRecord") ? t("noRecord") : `${translatedMood(point.mood, locale, t)} · ${t("energy").toLowerCase()} ${point.energy}`}
-                      />
-                    </div>
-                    <span className="text-[10px] uppercase tracking-wide text-ink-muted">{point.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
-              <span>{t("avgEnergy")}: {weeklySummary.avgEnergy || 0}/5</span>
-              <span>{t("avgStress")}: {weeklySummary.avgStress || 0}/5</span>
-            </div>
-          </section>
-
-          <section className="rounded-3xl bg-surface-muted p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-ink">
-                <CalendarHeart className="h-5 w-5 text-primary-deep" aria-hidden />
-                <h2 className="font-serif text-xl">{t("monthSummary")}</h2>
-              </div>
-              <span className="rounded-full bg-surface px-2 py-1 text-xs font-medium text-ink">
-                {monthlySummary.completionRate}%
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wide text-ink-muted">
-                  <span>{t("monthLog")}</span>
-                  <span>{monthlySummary.completed}/{monthlySummary.totalDays}</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-surface">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${monthlySummary.completionRate}%` }} />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("bestMood")}</p>
-                  <p className="mt-2 font-medium text-ink">{monthlySummary.bestMood === t("noData") ? t("noData") : translatedMood(monthlySummary.bestMood, locale, t)}</p>
-                </div>
-                <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("energy")}</p>
-                  <p className="mt-2 font-medium text-ink">{monthlySummary.avgEnergy || 0}/5</p>
-                </div>
-                <div className="rounded-2xl bg-surface p-3">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">{t("stress")}</p>
-                  <p className="mt-2 font-medium text-ink">{monthlySummary.avgStress || 0}/5</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-3xl bg-primary-soft p-5">
-            <h2 className="font-serif text-xl text-ink">{t("monthGoal")}</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {goalCards.map((goal) => (
-                <span
-                  key={goal.label}
-                  className={
-                    goal.ok
-                      ? "rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-primary-deep"
-                      : "rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink-muted"
-                  }
-                >
-                  {goal.label}
-                </span>
-              ))}
-            </div>
-            <p className="mt-3 text-sm text-ink-muted">
-              {goalCards[0]?.detail ?? t("habitsImprove")}
-            </p>
-          </section>
-
-          <section className="rounded-3xl bg-surface-muted p-5">
-            <h2 className="font-serif text-xl text-ink">{t("reminders")}</h2>
-            <div className="mt-3 space-y-2">
-              {notifications.map((item) => (
-                <div
-                  key={item.title}
-                  className={
-                    item.tone === "good"
-                      ? "rounded-2xl border border-primary/20 bg-surface p-3"
-                      : "rounded-2xl border border-amber-300/40 bg-amber-50 p-3"
-                  }
-                >
-                  <p className="font-medium text-ink">{item.title}</p>
-                  <p className="mt-1 text-sm text-ink-muted">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        </>
-      )}
-
-      {showOnboarding && (
-        <section className="rounded-3xl border border-sage-300 bg-primary-soft p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm uppercase tracking-widest text-primary-deep">{t("welcome")}</p>
-              <h2 className="mt-1 font-serif text-2xl text-ink">{t("bloomSupports")}</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowOnboarding(false)}
-              className="rounded-full bg-surface px-3 py-1 text-xs text-ink-muted"
-            >
-              {t("understood")}
-            </button>
+        <section className="rounded-[30px] bg-surface-muted p-5">
+          <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-bloom" aria-hidden /><h2 className="font-serif text-2xl text-ink">{t("recentCare")}</h2></div><span className="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary-deep">🔥 {streak}</span></div>
+          <div className="mt-4 grid grid-cols-7 gap-2">
+            {history.slice(0, 7).reverse().map((entry) => <div key={entry.date} className="rounded-2xl bg-surface p-2 text-center"><div className="mx-auto h-10 w-2 rounded-full bg-surface-raised"><div className="w-full rounded-full bg-primary" style={{ height: `${entry.energy * 20}%` }} /></div><span className="mt-2 block text-[9px] text-ink-muted">{entry.date.slice(-2)}</span></div>)}
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-            {t("onboarding")}
-          </p>
+          <button type="button" onClick={() => router.push("/insights")} className="mt-4 flex min-h-11 w-full items-center justify-between rounded-2xl bg-surface px-4 text-sm font-medium text-ink">{t("viewEvolution")}<ArrowRight className="h-4 w-4" aria-hidden /></button>
         </section>
       )}
 
-      <button
-        type="button"
-        aria-label={t("urgentHelp")}
-        onClick={() => setSosOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-bloom text-surface shadow-lg"
-      >
-        <Heart className="h-6 w-6" aria-hidden fill="currentColor" />
+      <button type="button" aria-label={t("urgentHelp")} onClick={() => setSosOpen(true)} className="fixed bottom-24 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-bloom text-surface shadow-lg ring-4 ring-surface">
+        <Heart className="h-5 w-5" aria-hidden fill="currentColor" />
       </button>
 
+      {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
       <SOSModal open={sosOpen} onClose={() => setSosOpen(false)} />
     </main>
   );

@@ -3,6 +3,7 @@ import {
   boolean,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -71,9 +72,66 @@ export const plantStages = pgTable("plant_stages", {
     .notNull(),
 });
 
+
+
+export const userProfiles = pgTable("user_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  preferredDuration: integer("preferred_duration").default(15).notNull(),
+  focus: varchar("focus", { length: 40 }).default("balance").notNull(),
+  onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const workoutSessions = pgTable("workout_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  dayKey: varchar("day_key", { length: 10 }).notNull(),
+  mood: varchar("mood", { length: 50 }).notNull(),
+  beforeEnergy: integer("before_energy").notNull(),
+  beforeStress: integer("before_stress").notNull(),
+  afterEnergy: integer("after_energy"),
+  afterStress: integer("after_stress"),
+  durationSeconds: integer("duration_seconds").notNull(),
+  exercisesCompleted: integer("exercises_completed").notNull().default(0),
+  totalExercises: integer("total_exercises").notNull().default(0),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export const userGoals = pgTable("user_goals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  type: varchar("type", { length: 40 }).notNull(),
+  target: integer("target").notNull(),
+  period: varchar("period", { length: 20 }).notNull().default("weekly"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const achievements = pgTable("achievements", {
+  id: varchar("id", { length: 60 }).primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  description: text("description").notNull(),
+});
+
+export const userAchievements = pgTable("user_achievements", {
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  achievementId: varchar("achievement_id", { length: 60 }).references(() => achievements.id).notNull(),
+  unlockedAt: timestamp("unlocked_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.achievementId] }),
+}));
+
 export const usersRelations = relations(users, ({ one, many }) => ({
   dailyLogs: many(dailyLogs),
   plantStage: one(plantStages),
+  profile: one(userProfiles),
+  workoutSessions: many(workoutSessions),
+  goals: many(userGoals),
+  achievements: many(userAchievements),
 }));
 
 export const moodsRelations = relations(moods, ({ many }) => ({
@@ -99,5 +157,37 @@ export const plantStagesRelations = relations(plantStages, ({ one }) => ({
   user: one(users, {
     fields: [plantStages.userId],
     references: [users.id],
+  }),
+}));
+
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
+export const workoutSessionsRelations = relations(workoutSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [workoutSessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userGoalsRelations = relations(userGoals, ({ one }) => ({
+  user: one(users, {
+    fields: [userGoals.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userAchievementsRelations = relations(userAchievements, ({ one }) => ({
+  user: one(users, {
+    fields: [userAchievements.userId],
+    references: [users.id],
+  }),
+  achievement: one(achievements, {
+    fields: [userAchievements.achievementId],
+    references: [achievements.id],
   }),
 }));

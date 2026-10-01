@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { moods } from "@/lib/db/schema";
 import { getPlantStage, growPlant, recordLog, requireUserId, resolveDayKey } from "@/lib/db/queries";
+import { syncAchievements } from "@/lib/db/premium";
 
 export async function POST(req: Request) {
   const userId = await requireUserId();
@@ -31,5 +32,6 @@ export async function POST(req: Request) {
   const stage = before?.moodId
     ? await getPlantStage(userId)
     : await growPlant(userId);
+  await syncAchievements(userId);
   return NextResponse.json({ ok: true, stage, dayKey });
 }

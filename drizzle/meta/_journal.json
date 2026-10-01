@@ -15,6 +15,13 @@
       "when": 1790676594843,
       "tag": "0001_quick_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790848490353,
+      "tag": "0002_bloom_premium",
+      "breakpoints": true
     }
   ]
 }

@@ -7,30 +7,24 @@ import { requireUserId } from "@/lib/db/queries";
 export async function GET(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const moodName = searchParams.get("mood");
   if (!moodName) return NextResponse.json({ error: "Falta el ánimo" }, { status: 400 });
-
-  const [mood] = await db
-    .select()
-    .from(moods)
-    .where(eq(moods.name, moodName));
+  const [mood] = await db.select().from(moods).where(eq(moods.name, moodName));
   if (!mood) return NextResponse.json({ error: "Ánimo no encontrado" }, { status: 404 });
-
-  const rows = await db
-    .select()
-    .from(exercises)
-    .where(eq(exercises.moodId, mood.id))
-    .orderBy(asc(exercises.position));
-
+  const rows = await db.select().from(exercises).where(eq(exercises.moodId, mood.id)).orderBy(asc(exercises.position));
+  const desired = Math.max(1, Math.min(30, Number(searchParams.get("duration") ?? 15))) * 60;
+  const selected = [] as typeof rows;
+  let total = 0;
+  for (const row of rows) {
+    if (selected.length > 0 && total + row.durationSeconds > desired * 1.25) break;
+    selected.push(row);
+    total += row.durationSeconds;
+    if (total >= desired) break;
+  }
+  const source = selected.length ? selected : rows;
   return NextResponse.json({
     mood: mood.name,
-    exercises: rows.map((r) => ({
-      name: r.name,
-      durationSeconds: r.durationSeconds,
-      instructions: r.instructions,
-      illustration: r.illustration,
-    })),
+    exercises: source.map((r) => ({ name: r.name, durationSeconds: r.durationSeconds, instructions: r.instructions, illustration: r.illustration })),
   });
 }
